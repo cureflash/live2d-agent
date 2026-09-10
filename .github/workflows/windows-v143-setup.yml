@@ -29,7 +29,12 @@ jobs:
           $catalogExists = Test-Path -LiteralPath $catalogPath -PathType Leaf
           $componentCount = 0
           if ($catalogExists) {
-            $componentCount = & node -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8").replace(/^\uFEFF/,""));console.log((c.packages||[]).filter(p=>p.id===process.argv[2]).length)' $catalogPath $componentId
+            $catalogScript = @'
+          const fs = require("fs");
+          const c = JSON.parse(fs.readFileSync(process.argv[2], "utf8").replace(/^\uFEFF/, ""));
+          console.log((c.packages || []).filter(p => p.id === process.argv[3]).length);
+          '@
+          $componentCount = $catalogScript | & node - $catalogPath $componentId
             if ($LASTEXITCODE -ne 0) { throw 'Catalog inspection failed.' }
           }
           $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
