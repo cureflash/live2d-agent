@@ -1,0 +1,100 @@
+name: Windows mouth diagnostic
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-mouth-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect private model mouth configuration without changing assets
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+          $built = Get-Content -LiteralPath (Join-Path $base 'expression-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $source = [IO.Path]::GetFullPath([string]$built.WorkingDirectory)
+          if (-not $source.StartsWith($base + '\expression-runtime-', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected expression runtime.' }
+          $configPath = Join-Path $source 'Resources\model\model.model3.json'
+          $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          $lipGroups = @($config.Groups | Where-Object { $_.Target -eq 'Parameter' -and $_.Name -eq 'LipSync' })
+          $lipIds = @($lipGroups | ForEach-Object { @($_.Ids) } | Select-Object -Unique)
+          if ($lipIds.Count -eq 0) { throw 'No LipSync parameter configured.' }
+
+          $expressionTouches = @()
+          foreach ($entry in @($config.FileReferences.Expressions)) {
+            $data = Get-Content -LiteralPath (Join-Path (Join-Path $source 'Resources\model') ([string]$entry.File)) -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($p in @($data.Parameters)) {
+              if ($lipIds -contains [string]$p.Id) {
+                $expressionTouches += [pscustomobject]@{ Id=[string]$p.Id; Value=[double]$p.Value; Blend=[string]$p.Blend }
+              }
+            }
+          }
+
+          $motionTouches = @()
+          foreach ($group in $config.FileReferences.Motions.PSObject.Properties) {
+            foreach ($entry in @($group.Value)) {
+              $data = Get-Content -LiteralPath (Join-Path (Join-Path $source 'Resources\model') ([string]$entry.File)) -Raw -Encoding UTF8 | ConvertFrom-Json
+              foreach ($curve in @($data.Curves)) {
+                if ($curve.Target -eq 'Parameter' -and $lipIds -contains [string]$curve.Id) {
+                  $segments = @($curve.Segments)
+                  $numbers = @($segments | Where-Object { $_ -is [byte] -or $_ -is [int16] -or $_ -is [int32] -or $_ -is [int64] -or $_ -is [single] -or $_ -is [double] -or $_ -is [decimal] } | ForEach-Object { [double]$_ })
+                  $motionTouches += [pscustomobject]@{ Id=[string]$curve.Id; NumericMin=$(if($numbers.Count){($numbers|Measure-Object -Minimum).Minimum}else{$null}); NumericMax=$(if($numbers.Count){($numbers|Measure-Object -Maximum).Maximum}else{$null}) }
+                }
+              }
+            }
+          }
+
+          $diag = Join-Path $base ('mouth-diag-' + $env:GITHUB_RUN_ID)
+          if (Test-Path -LiteralPath $diag) { Remove-Item -LiteralPath $diag -Recurse -Force }
+          Copy-Item -LiteralPath $source -Destination $diag -Recurse
+          New-Item -ItemType File -Path (Join-Path $diag 'motion-trace.enable') | Out-Null
+          Remove-Item -LiteralPath (Join-Path $diag 'model-inventory.tsv') -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath (Join-Path $diag 'model-trace.tsv') -ErrorAction SilentlyContinue
+          $proc = Start-Process -FilePath (Join-Path $diag 'Demo.exe') -WorkingDirectory $diag -PassThru
+          $clock = [Diagnostics.Stopwatch]::StartNew()
+          do {
+            Start-Sleep -Milliseconds 250
+            $proc.Refresh()
+            if ($proc.HasExited) { throw 'Renderer exited before diagnostic sample.' }
+            if ($clock.Elapsed.TotalSeconds -gt 45) { throw 'Renderer readiness timeout.' }
+          } until ($proc.MainWindowHandle -ne [IntPtr]::Zero -and $proc.Responding)
+          Start-Sleep -Seconds 2
+          if (-not $proc.CloseMainWindow()) { throw 'Could not request diagnostic window close.' }
+          if (-not $proc.WaitForExit(10000)) { throw 'Diagnostic renderer did not exit.' }
+          if ($proc.ExitCode -ne 0) { throw 'Diagnostic renderer failed.' }
+
+          $inventoryPath = Join-Path $diag 'model-inventory.tsv'
+          if (-not (Test-Path -LiteralPath $inventoryPath)) { throw 'Model inventory was not produced.' }
+          $inventory = @(Import-Csv -LiteralPath $inventoryPath -Delimiter "`t")
+          $lipParams = @($inventory | Where-Object { $_.kind -eq 'parameter' -and $lipIds -contains $_.id } | ForEach-Object {
+            [pscustomobject]@{ Id=$_.id; Minimum=[double]$_.minimum; Maximum=[double]$_.maximum; Default=[double]$_.default }
+          })
+          $trace = @()
+          $tracePath = Join-Path $diag 'model-trace.tsv'
+          if (Test-Path -LiteralPath $tracePath) {
+            $trace = @(Import-Csv -LiteralPath $tracePath -Delimiter "`t" | Where-Object { $lipIds -contains $_.id } | ForEach-Object {
+              [pscustomobject]@{ Stage=[int]$_.stage; Id=$_.id; Min=[double]$_.minimum; Max=[double]$_.maximum; Range=[double]$_.range }
+            })
+          }
+          [ordered]@{
+            Kind='mouth_configuration_diagnostic'
+            LipSyncGroupCount=$lipGroups.Count
+            LipSyncIds=$lipIds
+            LipParameters=$lipParams
+            ExpressionTouchCount=$expressionTouches.Count
+            ExpressionTouches=$expressionTouches
+            MotionTouchCount=$motionTouches.Count
+            MotionTouches=$motionTouches
+            IdleTrace=$trace
+            AudioPlayed=$false
+            SourceAssetsModified=$false
+            ModelImageExposed=$false
+            LocalPathExposed=$false
+          } | ConvertTo-Json -Depth 8
+          Remove-Item -LiteralPath $diag -Recurse -Force
