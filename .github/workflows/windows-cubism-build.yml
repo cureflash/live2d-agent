@@ -1,0 +1,83 @@
+name: Windows Cubism sample build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-cubism-build.yml']
+permissions:
+  contents: read
+concurrency:
+  group: live2d-agent-cubism-build
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 20
+    steps:
+      - name: Build pinned SDK and DirectXTK locally
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+          $work = Join-Path $base ('render-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT)
+          if (Test-Path -LiteralPath $work) { throw 'Build directory already exists.' }
+          $null = New-Item -ItemType Directory -Path $work
+          function Expand-CheckedZip([string]$archive, [string]$destination) {
+            $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+            try {
+              foreach ($entry in $zip.Entries) {
+                $target = [IO.Path]::GetFullPath((Join-Path $destination $entry.FullName))
+                if (-not $target.StartsWith($destination + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe ZIP entry.' }
+              }
+            } finally { $zip.Dispose() }
+            [IO.Compression.ZipFile]::ExtractToDirectory($archive, $destination)
+          }
+          function Run-Checked([string]$exe, [string[]]$arguments, [string]$phase) {
+            Write-Output ('PHASE ' + $phase)
+            $ErrorActionPreference = 'Continue'
+            $lines = @(& $exe @arguments 2>&1)
+            $code = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            foreach ($line in $lines) {
+              $safe = ([string]$line).Replace($work, '<build>').Replace($work.Replace('\','/'), '<build>')
+              $safe = $safe.Replace($env:USERPROFILE, '<user>').Replace($env:USERPROFILE.Replace('\','/'), '<user>')
+              Write-Output $safe
+            }
+            if ($code -ne 0) { throw ($phase + ' failed with exit code ' + $code) }
+          }
+          $archive = Join-Path $env:USERPROFILE 'Downloads\CubismSdkForNative-5-r.5.zip'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '7FF3A4BBC19C0A8728965AA522AB77EB11B252916453E68A8A78D3B71188BB12') { throw 'SDK ZIP differs from inspected version.' }
+          Expand-CheckedZip $archive $work
+          $sdk = Join-Path $work 'CubismSdkForNative-5-r.5'
+          $dxCommit = 'b34757e7b8c1f06f905166681c2b0328c3ec3f92'
+          $dxZip = Join-Path $work 'directxtk.zip'
+          Invoke-WebRequest -UseBasicParsing -Uri ('https://github.com/microsoft/DirectXTK/archive/' + $dxCommit + '.zip') -OutFile $dxZip
+          Write-Output ('DirectXTKArchiveSHA256 ' + (Get-FileHash -LiteralPath $dxZip -Algorithm SHA256).Hash)
+          $thirdParty = Join-Path $sdk 'Samples\D3D11\thirdParty'
+          Expand-CheckedZip $dxZip $thirdParty
+          Move-Item -LiteralPath (Join-Path $thirdParty ('DirectXTK-' + $dxCommit)) -Destination (Join-Path $thirdParty 'DirectXTK')
+          $vswhere = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $installations = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath)
+          if ($LASTEXITCODE -ne 0 -or $installations.Count -ne 1) { throw 'Expected one v143 installation.' }
+          $msbuild = Join-Path $installations[0] 'MSBuild\Current\Bin\MSBuild.exe'
+          $cmake = Join-Path $installations[0] 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+          $dx = Join-Path $thirdParty 'DirectXTK'
+          Run-Checked $msbuild @((Join-Path $dx 'DirectXTK_Desktop_2022.vcxproj'), '/nologo', '/v:minimal', '/m:2', '/t:Build', '/p:Platform=x64', '/p:Configuration=Release', '/p:PlatformToolset=v143', '/p:VCToolsVersion=14.44.35207') 'DirectXTK'
+          if (-not (Test-Path -LiteralPath (Join-Path $dx 'Bin\Desktop_2022\x64\Release\DirectXTK.lib'))) { throw 'DirectXTK library missing after build.' }
+          $source = Join-Path $sdk 'Samples\D3D11\Demo\proj.d3d11.cmake'
+          $buildDir = Join-Path $work 'build'
+          Run-Checked $cmake @('-S', $source, '-B', $buildDir, '-G', 'Visual Studio 18 2026', '-A', 'x64', '-T', 'v143,version=14.44.35207') 'Cubism configure'
+          Run-Checked $cmake @('--build', $buildDir, '--config', 'Release', '--parallel', '2') 'Cubism build'
+          $exe = Join-Path $buildDir 'bin\Demo\Release\Demo.exe'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Demo.exe missing after build.' }
+          $exeDir = Split-Path -LiteralPath $exe
+          foreach ($required in @('Resources','SampleShaders','FrameworkShaders')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $exeDir $required) -PathType Container)) { throw ('Missing runtime folder: ' + $required) }
+          }
+          $state = [ordered]@{ Executable = $exe; WorkingDirectory = $exeDir; SDKRoot = $sdk; BuildRoot = $work; BuiltUtc = [DateTime]::UtcNow.ToString('o') }
+          $state | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $base 'sample-build.json') -Encoding UTF8
+          $launcher = @('@echo off', ('cd /d "' + $exeDir + '"'), '"Demo.exe"')
+          $launcher | Set-Content -LiteralPath (Join-Path $base 'Launch-OfficialSample.cmd') -Encoding Default
+          [pscustomobject]@{ Kind = 'official_sample_build_not_visual_validation'; ExecutableExists = $true; ExecutableBytes = (Get-Item -LiteralPath $exe).Length; CeVIOAccessed = $false; Launched = $false } | ConvertTo-Json
