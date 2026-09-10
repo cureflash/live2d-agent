@@ -6,7 +6,7 @@ function Add-ProgressNotification {
     param([hashtable]$Queue, $Command, [string]$SessionId)
     if ($Command.SessionId -cne $SessionId -or $Command.Stream -cne 'single-progress-test' -or
         $Command.Id -cnotmatch '^[0-9a-f]{32}$' -or
-        $Command.Sequence -isnot [long] -and $Command.Sequence -isnot [int] -or
+        ($Command.Sequence -isnot [long] -and $Command.Sequence -isnot [int]) -or
         $Command.Sequence -le 0 -or $Command.Text -isnot [string] -or
         [string]::IsNullOrWhiteSpace($Command.Text) -or $Command.Text.Length -gt 280 -or
         $Command.Source -notin @('web-chatgpt-work-test','windows-queue-test')) { throw 'Invalid progress notification.' }
