@@ -89,7 +89,7 @@ public:
         if (!device && GetTickCount64()>=nextPoll) {
             nextPoll=GetTickCount64()+100;
             HANDLE dispatchGate=CreateFileA("speech.lock",GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
-            if(dispatchGate==INVALID_HANDLE_VALUE) return;
+            if(dispatchGate!=INVALID_HANDLE_VALUE) {
             std::ifstream ready("speech.ready");
             std::string candidate; ready>>candidate; ready.close();
             if (!candidate.empty()) {
@@ -118,6 +118,7 @@ public:
                 }
             }
             CloseHandle(dispatchGate);
+            }
         }
         float mouth=0;
         if (device) {
