@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <Model/CubismModel.hpp>
 #include <Id/CubismId.hpp>
+#include <Motion/CubismMotionJson.hpp>
+#include <Utils/CubismJson.hpp>
 class AgentModelTrace {
     bool enabled=false, initialized=false;
     ULONGLONG start=0;
@@ -16,6 +18,19 @@ class AgentModelTrace {
     unsigned frames[3]={}, vertexFrames=0, motionStarts=0, motionFailures=0;
 public:
     AgentModelTrace(){enabled=GetFileAttributesA("motion-trace.enable")!=INVALID_FILE_ATTRIBUTES;}
+    void input(const unsigned char* buffer, int size, const char* name){
+        if(!enabled)return;
+        std::ofstream out("motion-input.tsv",std::ios::app);
+        out<<name<<"\tbytes="<<size<<"\tbuffer="<<(buffer!=nullptr);
+        if(buffer){
+            Live2D::Cubism::Framework::Utils::CubismJson raw(buffer,size);
+            out<<"\tparse_error="<<(raw.GetParseError()?raw.GetParseError():"none");
+            Live2D::Cubism::Framework::CubismMotionJson json(buffer,size);
+            out<<"\tvalid="<<json.IsValid();
+            if(json.IsValid())out<<"\tconsistent="<<json.HasConsistency();
+        }
+        out<<"\n";
+    }
     void motion(bool ok){if(enabled){++motionStarts;if(!ok)++motionFailures;}}
     void observe(Live2D::Cubism::Framework::CubismModel* model,int stage){
         if(!enabled)return;
