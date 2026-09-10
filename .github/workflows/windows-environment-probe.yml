@@ -220,7 +220,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $installation.Count -ne 1) { throw 'Expected exactly one C++ installation.' }
           $cmake = Join-Path $installation[0] 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
           $ErrorActionPreference = 'Continue'
-          $configureOutput = @(& $cmake -S $source -B $build -G 'Visual Studio 18 2026' -A x64 2>&1)
+          $configureOutput = @(& $cmake -S $source -B $build -G 'Visual Studio 18 2026' -A x64 -T 'v143,version=14.44.35207' 2>&1)
           $configureExitCode = $LASTEXITCODE
           $ErrorActionPreference = 'Stop'
           foreach ($line in $configureOutput) {
