@@ -19,7 +19,7 @@ Windows上のLive2Dキャラクターが、Web版ChatGPTとCodexの作業進捗�
 
 ## 現在の阻害要因
 
-ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK for Native 5-r.5のZIP構成は確認済み。MSVC 19.51では付属D3D11サンプルの構成が停止したが、承認済みv143追加後は無改変SDKのCMake構成・生成に成功。アプリ本体のコンパイル・描画は未検証。Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
+ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK for Native 5-r.5のZIP構成は確認済み。MSVC 19.51では付属D3D11サンプルの構成が停止したが、承認済みv143追加後は無改変SDKのCMake構成・生成に成功。公式D3D11サンプルのコンパイルとウィンドウ生成・応答・正常終了は確認済み。モデルの見た目・動作の目視確認は未実施。Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
 
 ## 構成案（未確定）
 
@@ -165,3 +165,17 @@ WAVは一意な名前でユーザーの一時フォルダに残す。固定検�
 - 専用セットアップworkflowは同時実行を直列化し、実行中の取消しを無効化。登録済みなら再インストールしない。ランナー自体の管理者化・サービス化はしていない。
 - [SDK再検証](https://github.com/cureflash/live2d-agent/actions/runs/34460001127): `b89f3f83ff64688501171ed645327ee17660d93d`、`-G "Visual Studio 18 2026" -A x64 -T "v143,version=14.44.35207"`。MSVC 19.44.35228.0を検出し、CMake Configure/Generateとも成功、終了コード0。SDKソースの変更なし。
 - 完了範囲はv143追加とビルドファイル生成。アプリ本体のコンパイル、DirectXTKの準備、GUI表示・モデル描画、通知・音声統合は未完了。CeVIO接続なし。
+
+### 公式D3D11サンプルのビルド・起動試験（2026-09-10）
+
+- [ビルド](https://github.com/cureflash/live2d-agent/actions/runs/34460689596): `eb6bfe2ed31088d22ffb9ed7e51227310fe080fc`。SDK指定のDirectXTK dec2023をcommit `b34757e7b8c1f06f905166681c2b0328c3ec3f92` に固定し、Microsoft公式リポジトリから取得。SDK・DirectXTKのソースは無改変。x64 Release、v143 14.44.35207、並列数2でDirectXTK.lib、Framework.lib、Demo.exeを生成。Demo.exeは446,976 bytes。
+- SDKのsetup_msvc2022.batはVS17の所在を探し複数構成をビルドするため直接実行せず、内容を確認して既存VS18のMSBuildと導入済みv143を明示選択した。コンパイラー検出の偽装やSDKコードの差し替えはしていない。
+- 作業先はLocalAppData/live2d-agent内のrun別フォルダー。モデル・SDK・依存ソース・実行ファイルは公開Git/Artifactsへアップロードしていない。LocalAppData/live2d-agent/sample-build.jsonに実機専用のビルド先を記録。
+- [12秒起動試験](https://github.com/cureflash/live2d-agent/actions/runs/34460892040): ウィンドウあり、早期終了なし、応答falseで試験失敗。自分が起動したサンプルだけへCloseMainWindowを送り正常終了。
+- [45秒切り分け試験](https://github.com/cureflash/live2d-agent/actions/runs/34460977348): 5.3秒で応答false、15.2/25/35.2秒で応答true。45秒まで早期終了なし、自分のウィンドウを閉じ終了コード0。今回の観測では起動後に応答を回復した。初期処理のどの部分が時間を要したかは未特定。12秒以内に利用可能と保証しない。
+- この検証はプロセス・ウィンドウの動作確認であり、モデルが正しく描画され動いている証拠ではない。目視確認、最前面、まどかモデル・表情・身振り、音声同期は未検証。CeVIO接続なし。
+- ユーザー確認用に `%LOCALAPPDATA%\live2d-agent\Launch-OfficialSample.cmd` を作成。通常のPowerShellから以下で起動する。配送ジョブとは別に起動し、ユーザーが閉じるまで表示できるかも確認対象。
+  ```powershell
+  & "$env:LOCALAPPDATA\live2d-agent\Launch-OfficialSample.cmd"
+  ```
+- 公式サンプルのキャラクターと待機動作の目視確認を受けてから、私的な仮モデルの読込みへ進む。サンプルのタップ仕様を製品仕様として採用したものではない。
