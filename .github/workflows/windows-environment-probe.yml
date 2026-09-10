@@ -36,6 +36,9 @@ jobs:
             $cppPaths = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
             if ($LASTEXITCODE -ne 0) { throw 'vswhere C++ query failed.' }
             $result.CppToolchainInstallations = $cppPaths.Count
+            $result.VisualStudioBundledCMake = @($cppPaths | Where-Object {
+              Test-Path -LiteralPath (Join-Path $_ 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe') -PathType Leaf
+            }).Count
           }
           $result.CMakeOnPath = $null -ne (Get-Command cmake.exe -ErrorAction SilentlyContinue)
           $result.GitOnPath = $null -ne (Get-Command git.exe -ErrorAction SilentlyContinue)
@@ -50,5 +53,8 @@ jobs:
           }
           $result.CubismCoreHeaderCount = $sdkHeaders.Count
           $result.SearchErrorCount = $scanErrors.Count
+          $result.SearchErrorTypes = @($scanErrors | Group-Object { $_.Exception.GetType().FullName } | ForEach-Object {
+            [pscustomobject]@{ Type = $_.Name; Count = $_.Count }
+          })
           $result.SearchScope = 'Desktop Documents Downloads; absence is not proof of no installation'
           $result | ConvertTo-Json -Depth 5
