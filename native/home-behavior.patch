@@ -1,32 +1,26 @@
 --- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
 +++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
-@@ -16,6 +16,7 @@
+@@ -15,4 +15,5 @@
+ #include "LAppWavFileHandler_Common.hpp"
  #include "LAppModel_Common.hpp"
  #include "AgentAudio.hpp"
  #include "AgentExpression.hpp"
 +#include "AgentHome.hpp"
- 
- 
- /**
-@@ -26,6 +27,7 @@
+@@ -24,6 +25,7 @@
+  */
+ class LAppModel : public LAppModel_Common
  {
      AgentAudio _agentAudio;
      AgentExpression _agentExpression;
 +    AgentHome _agentHome;
  public:
-@@ -117,6 +119,8 @@
+@@ -118 +120,2 @@
      virtual Csm::csmBool HitTest(const Csm::csmChar* hitAreaName, Csm::csmFloat32 x, Csm::csmFloat32 y);
-+
 +    void StartHomeTap();
- 
-     /**
-      * @brief   モデルに削除マークを付ける
 --- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
 +++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
-@@ -382,6 +382,35 @@
- 
+@@ -383,4 +383,36 @@
      _model->LoadParameters(); // 前回セーブされた状態をロード
-+
 +    AgentHomeAction homeAction;
 +    if (_agentHome.Poll(homeAction))
 +    {
@@ -62,24 +56,19 @@
      if (_motionManager->IsFinished())
      {
          // モーションの再生がない場合、待機モーションの中からランダムで再生する
-@@ -402,9 +431,16 @@
+@@ -413,4 +445,5 @@
      _agentExpression.before(_model);
      _updateScheduler.OnLateUpdate(_model, deltaTimeSeconds);
      _agentExpression.after(_model);
 +    _agentHome.ApplyOverrides(_model);
      _agentAudio.update(_model, _lipSyncIds);
- 
-     _model->Update();
- 
+@@ -420 +453,6 @@
  }
 +
 +void LAppModel::StartHomeTap()
 +{
 +    if (!_agentAudio.IsBusy()) _agentHome.RequestTap();
 +}
- 
- CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt32 no, csmInt32 priority,
-                                             ACubismMotion::FinishedMotionCallback onFinishedMotionHandler, ACubismMotion::BeganMotionCallback onBeganMotionHandler)
 --- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppLive2DManager.cpp
 +++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppLive2DManager.cpp
 @@ -212,7 +212,7 @@
