@@ -11,7 +11,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, live2d-agent]
     timeout-minutes: 5
     steps:
-      - name: Inspect private model mouth metadata without changing assets
+      - name: Inspect private model LipSync group without changing assets
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
@@ -20,45 +20,18 @@ jobs:
           $built = Get-Content -LiteralPath (Join-Path $base 'expression-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $source = [IO.Path]::GetFullPath([string]$built.WorkingDirectory)
           if (-not $source.StartsWith($base + '\expression-runtime-', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected expression runtime.' }
-          $modelDir = Join-Path $source 'Resources\model'
-          $config = Get-Content -LiteralPath (Join-Path $modelDir 'model.model3.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $config = Get-Content -LiteralPath (Join-Path $source 'Resources\model\model.model3.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $lipGroups = @($config.Groups | Where-Object { $_.Target -eq 'Parameter' -and $_.Name -eq 'LipSync' })
           $lipIds = @($lipGroups | ForEach-Object { @($_.Ids) } | Select-Object -Unique)
           if ($lipIds.Count -eq 0) { throw 'No LipSync parameter configured.' }
-
-          $expressionTouches = @()
-          foreach ($entry in @($config.FileReferences.Expressions)) {
-            $data = Get-Content -LiteralPath (Join-Path $modelDir ([string]$entry.File)) -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($p in @($data.Parameters)) {
-              if ($lipIds -contains [string]$p.Id) {
-                $expressionTouches += [pscustomobject]@{ Id=[string]$p.Id; Value=[double]$p.Value; Blend=[string]$p.Blend }
-              }
-            }
-          }
-
-          $motionTouches = @()
-          foreach ($group in $config.FileReferences.Motions.PSObject.Properties) {
-            foreach ($entry in @($group.Value)) {
-              $data = Get-Content -LiteralPath (Join-Path $modelDir ([string]$entry.File)) -Raw -Encoding UTF8 | ConvertFrom-Json
-              foreach ($curve in @($data.Curves)) {
-                if ($curve.Target -eq 'Parameter' -and $lipIds -contains [string]$curve.Id) {
-                  $motionTouches += [pscustomobject]@{ Id=[string]$curve.Id; FadeInTime=$(if($null -ne $curve.FadeInTime){[double]$curve.FadeInTime}else{$null}); FadeOutTime=$(if($null -ne $curve.FadeOutTime){[double]$curve.FadeOutTime}else{$null}) }
-                }
-              }
-            }
-          }
-
           [ordered]@{
-            Kind='mouth_metadata_diagnostic'
+            Kind='mouth_lipsync_group_diagnostic'
             LipSyncGroupCount=$lipGroups.Count
+            LipSyncIdCount=$lipIds.Count
             LipSyncIds=$lipIds
-            ExpressionTouchCount=$expressionTouches.Count
-            ExpressionTouches=$expressionTouches
-            MotionTouchCount=$motionTouches.Count
-            MotionTouches=$motionTouches
             AudioPlayed=$false
             RendererStarted=$false
             SourceAssetsModified=$false
             ModelImageExposed=$false
             LocalPathExposed=$false
-          } | ConvertTo-Json -Depth 8
+          } | ConvertTo-Json -Depth 4
