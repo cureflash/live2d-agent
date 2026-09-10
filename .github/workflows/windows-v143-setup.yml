@@ -8,12 +8,12 @@ permissions:
   contents: read
 concurrency:
   group: live2d-agent-v143-setup
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   setup:
     if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Windows, X64, live2d-agent]
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - name: Inspect v143 installation prerequisites
         shell: powershell
@@ -27,10 +27,10 @@ jobs:
           $instance = $instances[0]
           $catalogPath = Join-Path $env:ProgramData ('Microsoft\VisualStudio\Packages\_Instances\' + $instance.instanceId + '\catalog.json')
           $catalogExists = Test-Path -LiteralPath $catalogPath -PathType Leaf
-          $component = @()
+          $componentCount = 0
           if ($catalogExists) {
-            $catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
-            $component = @($catalog.packages | Where-Object { $_.id -eq $componentId })
+            $componentCount = & node -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8").replace(/^\uFEFF/,""));console.log((c.packages||[]).filter(p=>p.id===process.argv[2]).length)' $catalogPath $componentId
+            if ($LASTEXITCODE -ne 0) { throw 'Catalog inspection failed.' }
           }
           $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
           $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -43,7 +43,7 @@ jobs:
             ChannelId = $instance.channelId
             ProductId = $instance.productId
             CatalogExists = $catalogExists
-            ComponentInCatalog = $component.Count -gt 0
+            ComponentInCatalog = [int]$componentCount -gt 0
             ComponentId = $componentId
             InstalledToolsets = @(Get-ChildItem -LiteralPath $toolsRoot -Directory | Select-Object -ExpandProperty Name)
             InstallerExists = Test-Path -LiteralPath (Join-Path $installerRoot 'setup.exe') -PathType Leaf
