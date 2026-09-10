@@ -23,8 +23,6 @@ public:
         std::ofstream out("motion-input.tsv",std::ios::app);
         out<<name<<"\tbytes="<<size<<"\tbuffer="<<(buffer!=nullptr);
         if(buffer){
-            Live2D::Cubism::Framework::Utils::CubismJson raw(buffer,size);
-            out<<"\tparse_error="<<(raw.GetParseError()?raw.GetParseError():"none");
             Live2D::Cubism::Framework::CubismMotionJson json(buffer,size);
             out<<"\tvalid="<<json.IsValid();
             if(json.IsValid())out<<"\tconsistent="<<json.HasConsistency();
