@@ -11,7 +11,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, live2d-agent]
     timeout-minutes: 5
     steps:
-      - name: Inspect private model LipSync group without changing assets
+      - name: Inspect private model mouth references without changing assets
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
@@ -20,18 +20,59 @@ jobs:
           $built = Get-Content -LiteralPath (Join-Path $base 'expression-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $source = [IO.Path]::GetFullPath([string]$built.WorkingDirectory)
           if (-not $source.StartsWith($base + '\expression-runtime-', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected expression runtime.' }
-          $config = Get-Content -LiteralPath (Join-Path $source 'Resources\model\model.model3.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $modelDir = Join-Path $source 'Resources\model'
+          $config = Get-Content -LiteralPath (Join-Path $modelDir 'model.model3.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $lipGroups = @($config.Groups | Where-Object { $_.Target -eq 'Parameter' -and $_.Name -eq 'LipSync' })
           $lipIds = @($lipGroups | ForEach-Object { @($_.Ids) } | Select-Object -Unique)
           if ($lipIds.Count -eq 0) { throw 'No LipSync parameter configured.' }
+
+          $expressionTouches = @()
+          $expressionsProp = $config.FileReferences.PSObject.Properties['Expressions']
+          if ($null -ne $expressionsProp) {
+            foreach ($entry in @($expressionsProp.Value)) {
+              $data = Get-Content -LiteralPath (Join-Path $modelDir ([string]$entry.File)) -Raw -Encoding UTF8 | ConvertFrom-Json
+              $paramsProp = $data.PSObject.Properties['Parameters']
+              if ($null -eq $paramsProp) { continue }
+              foreach ($p in @($paramsProp.Value)) {
+                if ($lipIds -contains [string]$p.Id) {
+                  $blendProp = $p.PSObject.Properties['Blend']
+                  $expressionTouches += [pscustomobject]@{
+                    Id = [string]$p.Id
+                    Value = [double]$p.Value
+                    Blend = $(if ($null -ne $blendProp) { [string]$blendProp.Value } else { '' })
+                  }
+                }
+              }
+            }
+          }
+
+          $motionTouches = @()
+          $motionsProp = $config.FileReferences.PSObject.Properties['Motions']
+          if ($null -ne $motionsProp) {
+            foreach ($group in $motionsProp.Value.PSObject.Properties) {
+              foreach ($entry in @($group.Value)) {
+                $data = Get-Content -LiteralPath (Join-Path $modelDir ([string]$entry.File)) -Raw -Encoding UTF8 | ConvertFrom-Json
+                $curvesProp = $data.PSObject.Properties['Curves']
+                if ($null -eq $curvesProp) { continue }
+                foreach ($curve in @($curvesProp.Value)) {
+                  if ([string]$curve.Target -eq 'Parameter' -and $lipIds -contains [string]$curve.Id) {
+                    $motionTouches += [pscustomobject]@{ Group=[string]$group.Name; Id=[string]$curve.Id }
+                  }
+                }
+              }
+            }
+          }
+
           [ordered]@{
-            Kind='mouth_lipsync_group_diagnostic'
-            LipSyncGroupCount=$lipGroups.Count
-            LipSyncIdCount=$lipIds.Count
+            Kind='mouth_reference_diagnostic'
             LipSyncIds=$lipIds
+            ExpressionTouchCount=$expressionTouches.Count
+            ExpressionTouches=$expressionTouches
+            MotionTouchCount=$motionTouches.Count
+            MotionTouches=$motionTouches
             AudioPlayed=$false
             RendererStarted=$false
             SourceAssetsModified=$false
             ModelImageExposed=$false
             LocalPathExposed=$false
-          } | ConvertTo-Json -Depth 4
+          } | ConvertTo-Json -Depth 6
