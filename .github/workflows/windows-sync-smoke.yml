@@ -1,0 +1,80 @@
+name: Native synchronization smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-sync-smoke.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 4
+    steps:
+      - name: Verify device cursor and duplicate claim without CeVIO
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $preview = $null
+          try {
+            $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+            $state = Get-Content -LiteralPath (Join-Path $base 'sync-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            $runtime = Join-Path $base ('sync-smoke-' + $env:GITHUB_RUN_ID)
+            Copy-Item -LiteralPath $state.WorkingDirectory -Destination $runtime -Recurse
+            $id = [guid]::NewGuid().ToString('N')
+            $wave = Join-Path $runtime ('speech\' + $id + '.wav')
+            $file = [IO.File]::Create($wave)
+            $writer = New-Object IO.BinaryWriter($file)
+            try {
+              $rate = 48000
+              $frames = $rate * 2
+              $writer.Write([Text.Encoding]::ASCII.GetBytes('RIFF'))
+              $writer.Write([int](36 + $frames * 2))
+              $writer.Write([Text.Encoding]::ASCII.GetBytes('WAVEfmt '))
+              $writer.Write([int]16)
+              $writer.Write([int16]1); $writer.Write([int16]1)
+              $writer.Write([int]$rate); $writer.Write([int]($rate * 2))
+              $writer.Write([int16]2); $writer.Write([int16]16)
+              $writer.Write([Text.Encoding]::ASCII.GetBytes('data'))
+              $writer.Write([int]($frames * 2))
+              for ($i = 0; $i -lt $frames; $i++) {
+                $value = if ($i -lt $rate) { [int16](2000 * [Math]::Sin(2 * [Math]::PI * 440 * $i / $rate)) } else { [int16]0 }
+                $writer.Write([int16]$value)
+              }
+            } finally { $writer.Dispose(); $file.Dispose() }
+            $preview = Start-Process -FilePath (Join-Path $runtime 'Demo.exe') -WorkingDirectory $runtime -PassThru -RedirectStandardOutput (Join-Path $runtime 'render.log') -RedirectStandardError (Join-Path $runtime 'render-error.log')
+            $timer = [Diagnostics.Stopwatch]::StartNew()
+            do {
+              Start-Sleep -Milliseconds 250
+              $preview.Refresh()
+              if ($preview.HasExited -or $timer.Elapsed.TotalSeconds -gt 60) { throw 'Window startup failed.' }
+            } until ($preview.MainWindowHandle -ne 0 -and $preview.Responding)
+            $windowReadyMs = $timer.ElapsedMilliseconds
+            $ready = Join-Path $runtime 'speech.ready'
+            [IO.File]::WriteAllText(($ready+'.tmp'), $id, [Text.Encoding]::ASCII)
+            [IO.File]::Move(($ready+'.tmp'), $ready)
+            $statusPath = Join-Path $runtime ('speech\' + $id + '.status')
+            do {
+              Start-Sleep -Milliseconds 200
+              $events = if (Test-Path -LiteralPath $statusPath) { [IO.File]::ReadAllText($statusPath) } else { '' }
+              if ($timer.Elapsed.TotalSeconds -gt 90) { throw 'Playback completion timeout.' }
+            } until ($events.Contains('playback_completed'))
+            if (-not $events.Contains('device_position_advanced') -or $events -notmatch 'peak_mouth=0\.[1-9]') { throw 'No measurable device/mouth progression.' }
+            [IO.File]::WriteAllText(($ready+'.tmp'), $id, [Text.Encoding]::ASCII)
+            [IO.File]::Move(($ready+'.tmp'), $ready)
+            do {
+              Start-Sleep -Milliseconds 200
+              $events = [IO.File]::ReadAllText($statusPath)
+              if ($timer.Elapsed.TotalSeconds -gt 100) { throw 'Duplicate result timeout.' }
+            } until ($events.Contains('duplicate_suppressed'))
+            if ([regex]::Matches($events, 'playback_submitted').Count -ne 1) { throw 'Duplicate playback detected.' }
+            $closed = $preview.CloseMainWindow()
+            if (-not $closed -or -not $preview.WaitForExit(10000) -or $preview.ExitCode -ne 0) { throw 'Own-window close failed.' }
+            [ordered]@{ Kind='native_audio_smoke_not_visual_acceptance'; WindowReadyMs=$windowReadyMs; PlaybackCompleted=$true; DevicePositionAdvanced=$true; MouthValueChanged=$true; DuplicateSuppressed=$true; CeVIOAccessed=$false; AudiblePlayback='requires_user_confirmation'; VisualLipSync='requires_user_confirmation' } | ConvertTo-Json
+          } catch {
+            Write-Output ('SYNC_SMOKE_FAILED ' + $_.Exception.GetType().FullName + ' ' + $_.Exception.Message.Replace($env:USERPROFILE, '<user>'))
+            exit 1
+          } finally {
+            if ($null -ne $preview -and -not $preview.HasExited) { $null = $preview.CloseMainWindow() }
+          }
