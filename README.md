@@ -19,7 +19,7 @@ Windows上のLive2Dキャラクターが、Web版ChatGPTとCodexの作業進捗�
 
 ## 現在の阻害要因
 
-ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK・Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
+ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK for Native 5-r.5のZIP構成は確認済み。付属D3D11サンプルのCMake構成は実機のMSVC 19.51を非対応として停止。Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
 
 ## 構成案（未確定）
 
@@ -138,3 +138,13 @@ WAVは一意な名前でユーザーの一時フォルダに残す。固定検�
 - 調査途中の[run 34454852968](https://github.com/cureflash/live2d-agent/actions/runs/34454852968)は候補検索の絞り込み不備があり、候補件数を無効とする。PowerShell 5.1ではLiteralPathとIncludeの組合せが効かない[公式仕様](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-childitem?view=powershell-5.1)を確認し、Filterと明示的な名前比較へ修正した。該当ログは拡張子別件数で、ファイル本文やフルパスは出力していない。
 - 全ジョブでCeVIO接続なし。C++/CMakeの所在は確認済みだが、ビルド・描画・統合成功を示すものではない。
 - 次の最小検証には公式Cubism SDK for Native一式の確保が必要。[公式ダウンロードページ](https://www.live2d.com/sdk/download/native/)にはダウンロード前の使用許諾確認がある。まだダウンロードや許諾同意、Editorの導入は実施していない。SDK入手後にバージョン・構成・ビルド条件を確認し、まず単体描画を試す。
+
+### ダウンロード済みSDKとビルド準備の確認（2026-09-10）
+
+- [ZIP検査](https://github.com/cureflash/live2d-agent/actions/runs/34456221156): Downloads内の `CubismSdkForNative-5-r.5.zip` を1件確認。27,566,034 bytes、1,354 entries、SHA256 `7FF3A4BBC19C0A8728965AA522AB77EB11B252916453E68A8A78D3B71188BB12`。これは実機ファイルの識別値であり、公式配布ハッシュとの照合ではない。
+- ZIP内にCoreヘッダー、Windows x86/x86_64の141/142/143用ライブラリ、Framework、D3D11サンプルのCMake設定を確認。全エントリーのデータ完全性・描画互換性を保証する検査ではない。
+- [ビルド条件照合](https://github.com/cureflash/live2d-agent/actions/runs/34456340201): 実機ツールセットは14.51.36231のみ、CMake 4.3.1-msvc1。SDKサンプルはMSVC_VERSION 1910以上1950未満を分類し、それ以外のMSVCを明示拒否する。D3D11サンプルはDirectXTKを別途必要とする。DirectXTKの取得・ビルドは未実施。
+- [無改変SDK構成試験](https://github.com/cureflash/live2d-agent/actions/runs/34456505182): `1f7010088820187fd210ed6d52924681ac54f7b1`。ZIPをハッシュ再照合・展開先検査後、LocalAppData/live2d-agent/probes内の一意フォルダーへ展開。SDKソースは変更していない。CMakeはWindows SDK 10.0.26100.0、MSVC 19.51.36256.0を検出し、CMakeLists.txt:66で `Unsupported Visual C++ compiler used.`、終了コード1。アプリ本体のコンパイル・起動・描画は未実施。
+- 現在の阻害要因は付属サンプルとインストール済みコンパイラーの不一致。次の候補はVS2022系v143 x64/x86ツールの追加と明示選択。追加は既存開発環境の変更に当たるため、ユーザー確認前には実施しない。SDKのバージョン判定を書き換えて成功扱いにはしない。
+- [Microsoftのコンポーネント変更手順](https://learn.microsoft.com/en-us/visualstudio/install/modify-visual-studio)。導入時に実機Installerで対象コンポーネントと追加内容を確認する。
+- SDK・展開ファイル・ビルド生成物のGit追加やArtifactsへのアップロードなし。CeVIOへの接続なし。ユーザーはSDK保存を報告したが、Editor導入・モデル表示成功を報告したものとは扱わない。
