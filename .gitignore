@@ -1,0 +1,25 @@
+# Local-only data
+/private/
+/assets/
+/models/
+/sdk/
+/runtime/
+/logs/
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.moc
+*.moc3
+*.mtn
+*.cmo3
+*.cmox
+*.psd
+*.wav
+*.mp3
+*.dll
+*.lib
+*.exe
+*.log
+node_modules/
