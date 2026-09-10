@@ -70,7 +70,10 @@ jobs:
             } until ($events.Contains('duplicate_suppressed'))
             if ([regex]::Matches($events, 'playback_submitted').Count -ne 1) { throw 'Duplicate playback detected.' }
             $closed = $preview.CloseMainWindow()
-            if (-not $closed -or -not $preview.WaitForExit(10000) -or $preview.ExitCode -ne 0) { throw 'Own-window close failed.' }
+            $exited = $preview.WaitForExit(10000)
+            $preview.Refresh()
+            [ordered]@{ CloseRequested=$closed; WaitReturned=$exited; HasExited=$preview.HasExited; ExitCode=$preview.ExitCode; DeviceEvents=$events } | ConvertTo-Json
+            if (-not $closed -or -not $exited -or $preview.ExitCode -ne 0) { throw 'Own-window close failed.' }
             [ordered]@{ Kind='native_audio_smoke_not_visual_acceptance'; WindowReadyMs=$windowReadyMs; PlaybackCompleted=$true; DevicePositionAdvanced=$true; MouthValueChanged=$true; DuplicateSuppressed=$true; CeVIOAccessed=$false; AudiblePlayback='requires_user_confirmation'; VisualLipSync='requires_user_confirmation' } | ConvertTo-Json
           } catch {
             Write-Output ('SYNC_SMOKE_FAILED ' + $_.Exception.GetType().FullName + ' ' + $_.Exception.Message.Replace($env:USERPROFILE, '<user>'))
