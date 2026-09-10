@@ -127,3 +127,51 @@ jobs:
           )
           $result.SearchScope = 'Desktop Documents Downloads; named install directories; uninstall registry. Not a complete disk inventory.'
           $result | ConvertTo-Json -Depth 5
+
+      - name: Inspect downloaded Cubism SDK archive without extraction or execution
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $root = Join-Path $env:USERPROFILE 'Downloads'
+          $archiveErrors = @()
+          $archives = @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*Cubism*' -ErrorAction SilentlyContinue -ErrorVariable +archiveErrors |
+            Where-Object { $_.Name -like '*Cubism*SDK*.zip' })
+          [pscustomobject]@{ Kind = 'sdk_archive_inventory_not_build_validation'; ArchiveCount = $archives.Count; SearchErrorCount = $archiveErrors.Count; CeVIOAccessed = $false } | ConvertTo-Json
+          if ($archiveErrors.Count -gt 0) { throw 'SDK archive search was incomplete.' }
+          if ($archives.Count -eq 0) { throw 'No Cubism SDK ZIP found in Downloads.' }
+          foreach ($archiveFile in $archives) {
+            $zip = $null
+            try {
+              $zip = [IO.Compression.ZipFile]::OpenRead($archiveFile.FullName)
+              $names = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\','/') })
+              $versionLabel = 'unrecognized_filename'
+              if ($archiveFile.Name -match '^CubismSdkForNative-[0-9A-Za-z_.()-]+\.zip$') { $versionLabel = $archiveFile.Name }
+              [pscustomobject]@{
+                Archive = $versionLabel
+                Bytes = $archiveFile.Length
+                SHA256 = (Get-FileHash -LiteralPath $archiveFile.FullName -Algorithm SHA256).Hash
+                EntryCount = $names.Count
+                CoreHeaders = @($names | Where-Object { $_ -like '*/Core/include/Live2DCubismCore.h' })
+                WindowsLibraries = @($names | Where-Object { $_ -like '*/Core/lib/windows/*' -and $_ -like '*.lib' })
+                FrameworkCMake = @($names | Where-Object { $_ -like '*/Framework/CMakeLists.txt' })
+                WindowsSampleCMake = @($names | Where-Object { $_ -like '*/Samples/*/CMakeLists.txt' -and $_ -like '*D3D11*' })
+                ReadmeFiles = @($names | Where-Object { $_ -like '*/README*' -and $_.Split('/').Count -le 2 })
+              } | ConvertTo-Json -Depth 4
+              foreach ($entry in $zip.Entries) {
+                $name = $entry.FullName.Replace('\','/')
+                if ($name -like '*/Samples/D3D11/Demo/CMakeLists.txt' -or ($name -like '*/README.md' -and $name.Split('/').Count -eq 2)) {
+                  if ($entry.Length -gt 24000) { Write-Output 'SDK document omitted due to size.'; continue }
+                  $reader = New-Object IO.StreamReader($entry.Open())
+                  try { $document = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                  Write-Output ('SDK_DOCUMENT ' + $name)
+                  Write-Output $document
+                }
+              }
+            } catch {
+              Write-Output ('Archive inspection failed: ' + $_.Exception.GetType().FullName)
+              exit 1
+            } finally {
+              if ($null -ne $zip) { $zip.Dispose() }
+            }
+          }
