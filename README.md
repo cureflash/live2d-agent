@@ -19,7 +19,7 @@ Windows上のLive2Dキャラクターが、Web版ChatGPTとCodexの作業進捗�
 
 ## 現在の阻害要因
 
-ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK for Native 5-r.5のZIP構成は確認済み。付属D3D11サンプルのCMake構成は実機のMSVC 19.51を非対応として停止。Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
+ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK for Native 5-r.5のZIP構成は確認済み。MSVC 19.51では付属D3D11サンプルの構成が停止したが、承認済みv143追加後は無改変SDKのCMake構成・生成に成功。アプリ本体のコンパイル・描画は未検証。Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
 
 ## 構成案（未確定）
 
@@ -157,3 +157,11 @@ WAVは一意な名前でユーザーの一時フォルダに残す。固定検�
 - 読取り中に時間がかかっていたため、カタログJSON処理をNodeへ変更したが、元の中断原因がJSONパーサーだったとは断定しない。
 - [再確認run](https://github.com/cureflash/live2d-agent/actions/runs/34457607405)は記録時点でqueued。専用ランナーの再接続が必要。事前確認は5分上限。同時実行時の旧ジョブ取消しは読取り専用段階の設定であり、インストール処理を追加する前に無効化する。
 - CeVIO接続・インストーラー実行・強制再起動・既存アプリ終了は行っていない。
+
+### v143導入・無改変SDKの構成成功（2026-09-10）
+
+- ランナー再接続後の事前確認で、Node -eへの文字列引数から引用符が失われるPowerShell 5.1の引数受渡し問題を実ログで確認。JavaScriptを標準入力で渡すよう修正し、[事前確認](https://github.com/cureflash/live2d-agent/actions/runs/34459643007)は成功。ローカルカタログの対象部品あり、ランナーは非管理者。
+- [導入実行](https://github.com/cureflash/live2d-agent/actions/runs/34459764496): Microsoft署名を確認した既存InstallerのみをRunAsで起動。承認済み `Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64` を追加。`--passive --norestart`、force/removeなし。終了コード0、再起動要求なし。部品登録と14.44.35207の実ディレクトリーを確認。既存14.51.36231も存在。
+- 専用セットアップworkflowは同時実行を直列化し、実行中の取消しを無効化。登録済みなら再インストールしない。ランナー自体の管理者化・サービス化はしていない。
+- [SDK再検証](https://github.com/cureflash/live2d-agent/actions/runs/34460001127): `b89f3f83ff64688501171ed645327ee17660d93d`、`-G "Visual Studio 18 2026" -A x64 -T "v143,version=14.44.35207"`。MSVC 19.44.35228.0を検出し、CMake Configure/Generateとも成功、終了コード0。SDKソースの変更なし。
+- 完了範囲はv143追加とビルドファイル生成。アプリ本体のコンパイル、DirectXTKの準備、GUI表示・モデル描画、通知・音声統合は未完了。CeVIO接続なし。
