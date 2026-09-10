@@ -19,7 +19,7 @@ Windows上のLive2Dキャラクターが、Web版ChatGPTとCodexの作業進捗�
 
 ## 現在の阻害要因
 
-ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK・Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。Windows実機へ接続するツールはこのセッションで確認できていない。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
+ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK・Editorの所在、モデルの描画互換性は未確認。CS7単体の音声再生は確認済み。このチャットからGitHubのワークフロー作成→Windows専用ランナーの調査ジョブ実行→ログ取得を確認済み。常駐アプリへの進捗通知配送とは別の検証。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
 
 ## 構成案（未確定）
 
@@ -115,3 +115,16 @@ WAVは一意な名前でユーザーの一時フォルダに残す。固定検�
 | 子プロセス終了後の他アプリ利用 | 未検証 |
 
 単発の単体試験。647 msを通知送信から発話開始までの遅延や通常時の代表値とは扱わない。JSONのAudiblePlaybackは固定の確認待ち表記であり、聴取成功は別途ユーザー報告に基づく。ローカルWAVパス・音声ファイルは公開記録へ含めない。
+
+
+## GitHub経由のWindows環境調査（2026-09-10）
+
+- [初回実行](https://github.com/cureflash/live2d-agent/actions/runs/34451779956): commit `f2edca64ab66024f9166359424a623ae86a3674e`、調査ジョブ成功。
+- [追加確認](https://github.com/cureflash/live2d-agent/actions/runs/34451908168): commit `9c8ba7106ea33f34ce6e66ab68e8f5cced615a71`、調査ジョブ成功。
+- ワークフロー: `.github/workflows/windows-environment-probe.yml`。main上の当該ファイルのpushと手動起動が対象。実行条件は所有者actor・対象リポジトリ・mainに限定。PR起動なし。専用ラベル `live2d-agent` に配送。
+- CeVIOのDLL読込み・API接続・起動・合成・再生・終了なし。他作業優先の指示に従い音声検証を保留。
+- PowerShell 5.1 x64、UserInteractive=true、SessionId=1を実ジョブで確認。表示ウィンドウ・音声出力先を確認したわけではない。
+- Visual Studio登録バージョン18.9.12112.369、isComplete=true、C++ツール登録1件、Visual Studio付属CMakeファイル1件。CMakeはPATH上にない。GitとNodeはPATH上に存在。コンパイルは未実行。
+- Desktop/Documents/Downloads内のLive2DCubismCore.hは0件。ただしDirectoryNotFoundExceptionが6件あり、探索は不完全。SDK未導入と断定しない。エラー発生箇所と原因、探索範囲外のSDK・Editor所在は未確認。
+- ファイル内容・モデル素材・私的パスを公開する処理や成果物アップロードは追加していない。公開ログへの検査出力は環境フラグ・バージョン・件数・例外型に限定（Actions自身の標準ログは別）。
+- このWebチャットで最終回答前にGitHub経由の調査ジョブを実行できた。Codex個別の送信試験、発話通知の受信・重複防止・遅延・統合動作は未検証。
