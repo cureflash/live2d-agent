@@ -19,7 +19,7 @@ Windows上のLive2Dキャラクターが、Web版ChatGPTとCodexの作業進捗�
 
 ## 現在の阻害要因
 
-モデル・CeVIO・Cubismの場所は不明。Windows実機へ接続するツールはこのセッションで確認できていない。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
+ユーザー実機の出力でCS7 64bit 7.0.23と外部連携DLL 2.1.4.0、仮モデルのmoc3とmodel3.json参照先37ファイルの存在を確認。Cubism SDK・Editorの所在、モデルの描画互換性、音声再生は未確認。Windows実機へ接続するツールはこのセッションで確認できていない。Linuxの検証をWindows成功と扱わない。以前ビューアに読み込めたというユーザー報告は、今回の公式SDK統合の証拠ではない。
 
 ## 構成案（未確定）
 
@@ -41,7 +41,7 @@ WAVと音素時刻は同じ文章・読み・声設定で作る。実際の再�
 
 - `probes/single-stream.mjs`: 単一プロセス・単一ストリームの発話順序だけを表す実行仕様。音声再生はしない。メモリ内のID台帳は検証専用で、常駐運用・再起動対応には使わない。
 - `tests/single-stream.test.mjs`: A読了後にBを飛ばしてC、重複、ID衝突、古い完了イベント、不正入力を検証。Linuxで4テスト成功。
-- `probes/Find-WindowsAssets.ps1`: インストール済みアプリの登録情報とDesktop/Documents/Downloads内のモデル候補を読み取る。Nox内部の操作、アプリ起動停止、設定変更、認証変更、外部送信はしない。Windows未実行・PowerShell構文検証未実施。候補がなくても不存在とはしない。出力にはローカルパスが含まれるため公開Gitへ登録しない。
+- `probes/Find-WindowsAssets.ps1`: インストール済みアプリの登録情報とDesktop/Documents/Downloads内のモデル候補を読み取る。Nox内部の操作、アプリ起動停止、設定変更、認証変更、外部送信はしない。ユーザーのWindows PowerShell 5.1 x64・対話セッションで実行成功。初期版の自動変数 $Matches との衝突を修正済み。候補がなくても不存在とはしない。出力にはローカルパスが含まれるため公開Gitへ登録しない。
 
 テスト: `node --test tests/single-stream.test.mjs`
 
@@ -69,9 +69,30 @@ Windows調査はスクリプトを確認してから、保存先でWindows Power
 
 - [CS7外部連携](https://cevio.jp/guide/cevio_cs7/interface/): 同時利用1アプリ。
 - [CS7 .NET](https://cevio.jp/guide/cevio_cs7/interface/dotnet/): .NET Framework 4.8、CS7の64bit DLL、WAVと音素API。DLL無許可再配布不可。
-- [Cubism 2.1との差](https://docs.live2d.com/en/cubism-sdk-manual/changefrom21/): 旧moc/mtnとmoc3/motion3.jsonは互換ではない。手元モデルは未確認。
+- [Cubism 2.1との差](https://docs.live2d.com/en/cubism-sdk-manual/changefrom21/): 旧moc/mtnとmoc3/motion3.jsonは互換ではない。手元でmoc3とmodel3.jsonの存在を確認。公式SDKでの再生は未検証。
 - [OpenAI developer mode](https://developers.openai.com/api/docs/guides/developer-mode): MCP書込と確認設定。実アカウントでの利用可否・途中通知は未検証。
 - [Codex JSONL](https://learn.chatgpt.com/docs/non-interactive-mode): CLIイベント。Web版へは一般化しない。
 - [Live2D公開条件](https://www.live2d.com/en/sdk/license/)、[CeVIO素材条件](https://cevio.jp/cevio_character/): 自作コードとSDK・モデル・素材・音声の条件は別。公式ファンキットを無条件に改変素材へ使わない。
 
 このリポジトリには自作コード・文書のみを置く。モデル、ゲーム素材、SDK/CS7バイナリ、音声、認証情報、実進捗本文、個人環境ログは同梱しない。
+
+
+## CS7単体検証（Windows未実行）
+
+`probes/Test-CeVIO.ps1` はCS7の公式.NET APIで同一文章・同一Talker設定から音素とWAVを生成し、SoundPlayerで再生する検証用スクリプト。常駐アプリの同期再生エンジンではない。設定変更・他アプリの終了・CeVIO本体の終了は行わないが、StartHostでCeVIOが起動する場合がある。
+
+CeVIOを他の仕事に使っていない時だけ、別の64bit Windows PowerShell 5.1プロセスで実行する。`-CeVIOIsFree` はユーザーによる空き確認であり、自動的な占有検出ではない。DLLパスはローカルで確認した実ファイルを指定する。
+
+```powershell
+powershell.exe -NoProfile -File '.\probes\Test-CeVIO.ps1' -DllPath '<CS7 DLLのフルパス>' -Cast 'さとうささら' -Text '音声の確認をしているよ。' -CeVIOIsFree
+```
+
+WAVは一意な名前でユーザーの一時フォルダに残す。固定検証文だけを使い、WAVや実機出力を公開Gitへ登録しない。音素はメモリ内のみ。終了コード1は失敗で、失敗した段階を表示する。音が聞こえたかはユーザー確認が必要。外部連携の解放は、子PowerShell終了後に別の仕事で利用できるかを別途確認する。ホスト起動APIの所要時間には既存ホストへの接続も含まれ、コールドスタートと断定しない。
+
+`ProbeToPlaybackCallMs` はプローブ開始から再生API呼出しまで。実際の音声出力開始、通知配送、AI生成、再生待ち、一時停止時間を測った値ではない。Windowsでの構文・API実行・聴取は未検証。
+
+## 検証済み事項（2026-09-10）
+
+- ユーザー提示の実機出力: PowerShell 5.1 x64、対話セッション、CS7登録情報とDLLの存在。
+- 仮モデル: 設定の参照先37件すべて存在（moc3、テクスチャ3、Physics/Pose、表情22、モーション9）。内容の妥当性、内部パラメータ・当たり判定ID、見た目・動作は未検証。
+- このChatGPTセッションからGitHubへのコード書込みは成功。途中通知のWindows受信を実証したものではない。Web版・CodexからWindowsへの通知経路はどちらも未検証。
