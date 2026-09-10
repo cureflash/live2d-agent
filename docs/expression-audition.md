@@ -16,3 +16,11 @@ Implementation:
 Private build workflow windows-expression-build.yml validates every model expression through the running SDK, rejects an out-of-range index, then checks recorded-audio playback completion before installing the launcher. GUI appearance requires separate user observation.
 
 No CeVIO access; no game assets, model files or decoded voice files are committed or uploaded.
+
+## Current validation status
+
+Native expression build completed in run 34484339211; the subsequent launcher parse gate failed due to replacement-string expansion during source generation. The launcher source was corrected in commit 896a4f0348fd7858b8ffa1b25cc42f3f8b754e98.
+
+Verification run 34484628263 / job 102895673864 started on the private Windows runner at 2026-09-10T13:45:34Z. GitHub still reports the script step in progress beyond its five-minute job timeout, and completed logs are unavailable. Whether the runner disconnected, Windows paused or the process stalled has not been established.
+
+Do not mark expression runtime verification or launcher installation complete. User confirmation of the runner console state is required to diagnose the stalled verification.
