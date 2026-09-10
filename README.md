@@ -128,3 +128,13 @@ WAVは一意な名前でユーザーの一時フォルダに残す。固定検�
 - Desktop/Documents/Downloads内のLive2DCubismCore.hは0件。ただしDirectoryNotFoundExceptionが6件あり、探索は不完全。SDK未導入と断定しない。エラー発生箇所と原因、探索範囲外のSDK・Editor所在は未確認。
 - ファイル内容・モデル素材・私的パスを公開する処理や成果物アップロードは追加していない。公開ログへの検査出力は環境フラグ・バージョン・件数・例外型に限定（Actions自身の標準ログは別）。
 - このWebチャットで最終回答前にGitHub経由の調査ジョブを実行できた。Codex個別の送信試験、発話通知の受信・重複防止・遅延・統合動作は未検証。
+
+### SDK所在・探索エラーの追加調査（2026-09-10）
+
+- [切り分け実行](https://github.com/cureflash/live2d-agent/actions/runs/34455202918): 以前の6件はすべて存在する非ReparsePointフォルダー。パス長241/244文字、検索名を連結すると260/263文字。各場所で長い完全ファイル名Filterは1件の例外、短い `*` Filterは例外0件で列挙成功。列挙後の完全名照合でもCoreヘッダー0件。削除や権限変更ではなく、検索文字列の長さに依存する探索側の問題と切り分けた。OS内部の実装までは未検証。
+- 修正: 短い `*Cubism*` Filterで列挙後、Nameを `Live2DCubismCore.h` と照合。Windows設定、実行ポリシー、既存アプリは変更していない。
+- [修正後実行](https://github.com/cureflash/live2d-agent/actions/runs/34455318445): commit `1af7874aff5ee698518780cbfbf4e16f3cdaac52`。ヘッダー・追加候補検索・レジストリ検索のエラーはすべて0件。Coreヘッダー、指定名のNativeライブラリ・SDK ZIP・Editor実行ファイル候補は0件。Live2D/Cubismのアプリ登録、Program Files等直下の該当名フォルダーも0件。
+- 範囲: Desktop/Documents/Downloadsの非隠しファイル、アンインストール登録、Program Files・Program Files(x86)・LocalAppData/Programs直下のLive2D/Cubism名フォルダー。別ドライブ・改名ZIP・隠し領域・Nox内部等は対象外。PC全体でSDKが不存在とは断定しない。
+- 調査途中の[run 34454852968](https://github.com/cureflash/live2d-agent/actions/runs/34454852968)は候補検索の絞り込み不備があり、候補件数を無効とする。PowerShell 5.1ではLiteralPathとIncludeの組合せが効かない[公式仕様](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-childitem?view=powershell-5.1)を確認し、Filterと明示的な名前比較へ修正した。該当ログは拡張子別件数で、ファイル本文やフルパスは出力していない。
+- 全ジョブでCeVIO接続なし。C++/CMakeの所在は確認済みだが、ビルド・描画・統合成功を示すものではない。
+- 次の最小検証には公式Cubism SDK for Native一式の確保が必要。[公式ダウンロードページ](https://www.live2d.com/sdk/download/native/)にはダウンロード前の使用許諾確認がある。まだダウンロードや許諾同意、Editorの導入は実施していない。SDK入手後にバージョン・構成・ビルド条件を確認し、まず単体描画を試す。
