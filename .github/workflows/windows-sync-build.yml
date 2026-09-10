@@ -33,9 +33,10 @@ jobs:
             if (-not $cmakeText.Contains($needle)) { throw 'SDK CMake source differs.' }
             $cmakeText = $cmakeText.Replace($needle, ('set(SDK_ROOT_PATH "' + $built.SDKRoot.Replace('\','/') + '")'))
             [IO.File]::WriteAllText((Join-Path $source 'CMakeLists.txt'), $cmakeText, (New-Object Text.UTF8Encoding($false)))
-            $pin = 'e1e948899c75e60baddc07098acfc4303fa8f9d6'
-            Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $pin + '/native/AgentAudio.hpp') -OutFile (Join-Path $source 'src\AgentAudio.hpp')
-            Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $pin + '/native/sdk-integration.patch') -OutFile (Join-Path $work 'integration.patch')
+            $audioPin = '9feee1b16515a8b5035200f5f269102b93734e40'
+            $patchPin = 'e1e948899c75e60baddc07098acfc4303fa8f9d6'
+            Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $audioPin + '/native/AgentAudio.hpp') -OutFile (Join-Path $source 'src\AgentAudio.hpp')
+            Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $patchPin + '/native/sdk-integration.patch') -OutFile (Join-Path $work 'integration.patch')
             & git -C $work apply --check --ignore-space-change (Join-Path $work 'integration.patch') 2>&1 | Out-File (Join-Path $work 'patch-check.log')
             if ($LASTEXITCODE -ne 0) { throw 'SDK application source patch does not match.' }
             & git -C $work apply --ignore-space-change (Join-Path $work 'integration.patch')
