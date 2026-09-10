@@ -38,7 +38,7 @@ class AgentAudio {
             if (prepared) waveOutUnprepareHeader(device,&header,sizeof(header));
             waveOutClose(device);
         }
-        device=nullptr; prepared=false; header={}; pcm.clear();
+        device=nullptr; prepared=false; managed=false; header={}; pcm.clear();
     }
     void load() {
         std::ifstream in("speech/" + id + ".wav",std::ios::binary|std::ios::ate);
@@ -144,8 +144,8 @@ public:
                 }
             } catch(const std::exception& error) { status(error.what()); close(); }
         }
-        // This probe owns only configured mouth parameters after all other updaters.
-        // No virtual parameter is accepted. Completion/failure writes closed mouth.
+        // Own configured mouth parameters only while playback remains active.
+        // Once playback completes or fails, close() releases ownership immediately.
         if(managed) for(int i=0;i<ids.GetSize();++i) {
             for(int p=0;p<model->GetParameterCount();++p) if(model->GetParameterId(p)==ids[i]) {
                 model->SetParameterValue(p,mouth); break;
