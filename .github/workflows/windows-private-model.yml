@@ -1,0 +1,96 @@
+name: Windows private model probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-private-model.yml']
+permissions:
+  contents: read
+jobs:
+  prepare:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 5
+    steps:
+      - name: Prepare private model runtime without modifying source assets
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+            $built = Get-Content -LiteralPath (Join-Path $base 'sample-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            $searchErrors = @()
+            $configs = @(Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE 'Desktop') -Recurse -File -Filter '*.json' -ErrorAction SilentlyContinue -ErrorVariable +searchErrors |
+              Where-Object { $_.Name -eq 'model.model3.json' })
+            if ($searchErrors.Count -gt 0) { throw 'Private model search incomplete.' }
+            if ($configs.Count -ne 1) { throw 'Expected exactly one private model configuration; no candidate selected.' }
+            $sourceRoot = $configs[0].DirectoryName
+            $model = Get-Content -LiteralPath $configs[0].FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($model.Version -ne 3 -or -not $model.FileReferences.Moc) { throw 'Unsupported model configuration.' }
+            $refs = New-Object 'System.Collections.Generic.List[string]'
+            $refs.Add([string]$model.FileReferences.Moc)
+            foreach ($texture in $model.FileReferences.Textures) { $refs.Add([string]$texture) }
+            foreach ($key in @('Physics','Pose','UserData','DisplayInfo')) {
+              if ($model.FileReferences.$key) { $refs.Add([string]$model.FileReferences.$key) }
+            }
+            foreach ($expression in $model.FileReferences.Expressions) { $refs.Add([string]$expression.File) }
+            foreach ($group in $model.FileReferences.Motions.PSObject.Properties) {
+              foreach ($motion in $group.Value) {
+                $refs.Add([string]$motion.File)
+                if ($motion.Sound) { $refs.Add([string]$motion.Sound) }
+              }
+            }
+            $files = @($refs | Select-Object -Unique)
+            foreach ($relative in $files) {
+              $full = [IO.Path]::GetFullPath((Join-Path $sourceRoot $relative))
+              if (-not $full.StartsWith($sourceRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $full -PathType Leaf)) { throw 'Missing or out-of-root model reference.' }
+            }
+            $runtime = Join-Path $base ('private-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT)
+            if (Test-Path -LiteralPath $runtime) { throw 'Private runtime already exists.' }
+            $null = New-Item -ItemType Directory -Path $runtime
+            Get-ChildItem -LiteralPath $built.WorkingDirectory -File | Copy-Item -Destination $runtime
+            foreach ($folder in @('SampleShaders','FrameworkShaders')) {
+              Copy-Item -LiteralPath (Join-Path $built.WorkingDirectory $folder) -Destination $runtime -Recurse
+            }
+            $resources = Join-Path $runtime 'Resources'
+            $null = New-Item -ItemType Directory -Path $resources
+            Get-ChildItem -LiteralPath (Join-Path $built.WorkingDirectory 'Resources') -File | Copy-Item -Destination $resources
+            $modelTarget = Join-Path $resources 'model'
+            $null = New-Item -ItemType Directory -Path $modelTarget
+            Copy-Item -LiteralPath $configs[0].FullName -Destination (Join-Path $modelTarget 'model.model3.json')
+            foreach ($relative in $files) {
+              $source = Join-Path $sourceRoot $relative
+              $destination = Join-Path $modelTarget $relative
+              $null = New-Item -ItemType Directory -Path (Split-Path -LiteralPath $destination) -Force
+              Copy-Item -LiteralPath $source -Destination $destination
+              if ((Get-FileHash -LiteralPath $source).Hash -ne (Get-FileHash -LiteralPath $destination).Hash) { throw 'Copied model file differs from source.' }
+            }
+            if ((Get-FileHash -LiteralPath $configs[0].FullName).Hash -ne (Get-FileHash -LiteralPath (Join-Path $modelTarget 'model.model3.json')).Hash) { throw 'Copied model configuration differs from source.' }
+            $motionInventory = @(
+              foreach ($group in $model.FileReferences.Motions.PSObject.Properties) {
+                $index = 0
+                foreach ($motion in $group.Value) {
+                  $data = Get-Content -LiteralPath (Join-Path $sourceRoot $motion.File) -Raw -Encoding UTF8 | ConvertFrom-Json
+                  [pscustomobject]@{ Group = $group.Name; Index = $index; Duration = $data.Meta.Duration; Loop = $data.Meta.Loop; CurveCount = $data.Meta.CurveCount }
+                  $index++
+                }
+              }
+            )
+            $state = [ordered]@{ Executable = (Join-Path $runtime 'Demo.exe'); WorkingDirectory = $runtime; ModelSource = $configs[0].FullName; PreparedUtc = [DateTime]::UtcNow.ToString('o') }
+            $state | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $base 'private-model.json') -Encoding UTF8
+            @('@echo off', ('cd /d "' + $runtime + '"'), '"Demo.exe"') | Set-Content -LiteralPath (Join-Path $base 'Launch-PrivateModel.cmd') -Encoding Default
+            [pscustomobject]@{
+              Kind = 'private_model_staging_not_visual_validation'
+              ReferencedFilesVerified = $files.Count
+              SourceAssetsModified = $false
+              ModelConfigurationUnchanged = $true
+              HasSampleIdleGroup = $null -ne $model.FileReferences.Motions.Idle
+              HasSampleTapBodyGroup = $null -ne $model.FileReferences.Motions.TapBody
+              ExpressionCount = @($model.FileReferences.Expressions).Count
+              Motions = $motionInventory
+              CeVIOAccessed = $false
+            } | ConvertTo-Json -Depth 5
+          } catch {
+            Write-Output ('PRIVATE_MODEL_PREPARATION_FAILED ' + $_.Exception.GetType().FullName)
+            exit 1
+          }
