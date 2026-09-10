@@ -48,9 +48,20 @@ jobs:
           foreach ($folder in @('Desktop','Documents','Downloads')) {
             $root = Join-Path $env:USERPROFILE $folder
             if (Test-Path -LiteralPath $root -PathType Container) {
-              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Include 'Live2DCubismCore.h','Live2DCubismCore.lib','*Cubism*SDK*.zip','CubismEditor*.exe' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors)
+              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'Live2DCubismCore.h' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors)
             }
           }
+          $additionalCandidates = @()
+          $additionalErrors = @()
+          foreach ($folder in @('Desktop','Documents','Downloads')) {
+            $root = Join-Path $env:USERPROFILE $folder
+            if (Test-Path -LiteralPath $root -PathType Container) {
+              $additionalCandidates += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*Cubism*' -ErrorAction SilentlyContinue -ErrorVariable +additionalErrors |
+                Where-Object { $_.Name -eq 'Live2DCubismCore.lib' -or $_.Name -like '*Cubism*SDK*.zip' -or $_.Name -like 'CubismEditor*.exe' })
+            }
+          }
+          $result.AdditionalCandidateCount = $additionalCandidates.Count
+          $result.AdditionalSearchErrorCount = $additionalErrors.Count
           $result.SdkCandidateTypes = @($sdkHeaders | Group-Object Extension | ForEach-Object {
             [pscustomobject]@{ Extension = $_.Name; Count = $_.Count }
           })
@@ -103,5 +114,5 @@ jobs:
               }
             }
           )
-          $result.SearchScope = 'Desktop Documents Downloads; absence is not proof of no installation'
+          $result.SearchScope = 'Desktop Documents Downloads; named install directories; uninstall registry. Not a complete disk inventory.'
           $result | ConvertTo-Json -Depth 5
