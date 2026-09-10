@@ -1,0 +1,57 @@
+--- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
++++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
+@@ -252,8 +252,7 @@
+         {
+             _lipSyncIds.PushBack(_modelSetting->GetLipSyncParameterId(i));
+         }
+-        CubismLipSyncUpdater* lipSync = CSM_NEW CubismLipSyncUpdater(_lipSyncIds, _wavFileHandler);
+-        _updateScheduler.AddUpdatableList(lipSync);
++        // AgentAudio owns the configured mouth parameters in this probe.
+     }
+ 
+     // Look
+@@ -398,6 +397,7 @@
+     _opacity = _model->GetModelOpacity();
+ 
+     _updateScheduler.OnLateUpdate(_model, deltaTimeSeconds);
++    _agentAudio.update(_model, _lipSyncIds);
+ 
+     _model->Update();
+ 
+--- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
++++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
+@@ -14,6 +14,7 @@
+ 
+ #include "LAppWavFileHandler_Common.hpp"
+ #include "LAppModel_Common.hpp"
++#include "AgentAudio.hpp"
+ 
+ 
+ /**
+@@ -23,6 +24,7 @@
+  */
+ class LAppModel : public LAppModel_Common
+ {
++    AgentAudio _agentAudio;
+ public:
+     /**
+      * @brief コンストラクタ
+--- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppDelegate.cpp
++++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppDelegate.cpp
+@@ -84,6 +84,7 @@
+     //ウインドウ表示
+     ShowWindow(_windowHandle, SW_SHOWDEFAULT);
+     UpdateWindow(_windowHandle);
++    SetWindowPos(_windowHandle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+ 
+     // 現在のウィンドウサイズ
+     int windowWidth, windowHeight;
+@@ -276,7 +277,7 @@
+ 
+ void LAppDelegate::Run()
+ {
+-    MSG msg;
++    MSG msg = {};
+ 
+     do
+     {
