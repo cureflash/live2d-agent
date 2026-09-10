@@ -81,7 +81,8 @@ try {
     $pointer=[ordered]@{ SessionId=$sessionId; ReceiverPid=$PID; ReceiverStartUtc=$self.StartTime.ToUniversalTime().ToString('o'); Directory=$session; Stream='single-progress-test' }
     if (-not $AutomatedSmoke) {
         $pointer | ConvertTo-Json | Set-Content -LiteralPath $sessionPointer -Encoding UTF8
-        Write-Host 'WAITING_FOR_PROGRESS. This test accepts one work stream; no restart replay is enabled.'
+        Write-Host ('WAITING_FOR_PROGRESS SessionId='+$sessionId)
+        Write-Host 'This test accepts one work stream; no restart replay is enabled.'
     }
     $a='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     $b='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
