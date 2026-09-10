@@ -1,0 +1,58 @@
+name: Prepare separate notification runner files
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-notification-runner-prepare.yml']
+permissions:
+  contents: read
+concurrency:
+  group: live2d-notification-runner-prepare
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 5
+    steps:
+      - name: Stage verified runner archive without registering or copying credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = 'Preflight'
+          try {
+            $destination = Join-Path $env:USERPROFILE 'actions-runner-live2d-notifications'
+            $archive = Join-Path $env:USERPROFILE 'actions-runner-live2d\actions-runner\actions-runner-win-x64-2.337.0.zip'
+            $expected = '1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc'
+            if (Test-Path -LiteralPath $destination) { throw 'Destination already exists; no overwrite performed.' }
+            if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) { throw 'Previously verified runner archive is missing.' }
+            $stage = 'Hash'
+            if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $expected) { throw 'Archive hash mismatch.' }
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+            $stage = 'ValidateArchive'
+            try {
+              foreach ($entry in $zip.Entries) {
+                $path = [IO.Path]::GetFullPath((Join-Path $destination $entry.FullName))
+                if (-not $path.StartsWith($destination + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive path.' }
+                if ($entry.FullName -match '(^|/)\.(runner|credentials|credentials_rsaparams)$') { throw 'Unexpected registration material in archive.' }
+              }
+            } finally { $zip.Dispose() }
+            $stage = 'Extract'
+            [IO.Compression.ZipFile]::ExtractToDirectory($archive, $destination)
+            foreach ($name in @('config.cmd','run.cmd','bin\Runner.Listener.exe')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $destination $name) -PathType Leaf)) { throw 'Required runner file missing.' }
+            }
+            [ordered]@{
+              Kind='notification_runner_files_prepared_not_registered'
+              ArchiveHashVerified=$true
+              RequiredFilesPresent=$true
+              ExistingRunnerChanged=$false
+              RegistrationAttempted=$false
+              ServiceInstalled=$false
+              CeVIOAccessed=$false
+            } | ConvertTo-Json
+          } catch {
+            Write-Output ('RUNNER_PREPARE_FAILED stage=' + $stage + ' type=' + $_.Exception.GetType().FullName + ' reason=' + $_.Exception.Message.Replace($env:USERPROFILE, '<user>'))
+            exit 1
+          }
