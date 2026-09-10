@@ -25,12 +25,18 @@ jobs:
           $timer = [Diagnostics.Stopwatch]::StartNew()
           $windowSeen = $false
           $responsive = $false
-          while ($timer.Elapsed.TotalSeconds -lt 12) {
+          $observations = @()
+          $nextObservation = 5
+          while ($timer.Elapsed.TotalSeconds -lt 45) {
             $process.Refresh()
             if ($process.HasExited) { break }
             if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
               $windowSeen = $true
               $responsive = $process.Responding
+            }
+            if ($timer.Elapsed.TotalSeconds -ge $nextObservation) {
+              $observations += [pscustomobject]@{ Seconds = [math]::Round($timer.Elapsed.TotalSeconds,1); HasWindow = ($process.MainWindowHandle -ne [IntPtr]::Zero); Responsive = $process.Responding; CpuSeconds = $process.TotalProcessorTime.TotalSeconds }
+              $nextObservation += 10
             }
             Start-Sleep -Milliseconds 250
           }
@@ -45,6 +51,7 @@ jobs:
           }
           [pscustomobject]@{
             Kind = 'sample_window_lifecycle_not_visual_validation'
+            Observations = $observations
             WindowObserved = $windowSeen
             Responsive = $responsive
             ExitedBeforeTestEnd = $exitedEarly
@@ -54,5 +61,5 @@ jobs:
             FinalExitCode = $(if ($closed) { $process.ExitCode } else { $null })
             VisualAppearance = 'requires_user_confirmation'
             CeVIOAccessed = $false
-          } | ConvertTo-Json
+          } | ConvertTo-Json -Depth 4
           if (-not $windowSeen -or -not $responsive -or $exitedEarly -or -not $closed -or $process.ExitCode -ne 0) { exit 1 }
