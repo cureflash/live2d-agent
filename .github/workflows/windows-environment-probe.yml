@@ -78,7 +78,18 @@ jobs:
               $item = Get-Item -LiteralPath $errorPath -Force -ErrorAction SilentlyContinue
               if ($null -ne $item) { $reparse = ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 }
             }
+            $longFilterErrors = @()
+            $shortFilterErrors = @()
+            $shortItems = @()
+            if ($exists) {
+              $null = @(Get-ChildItem -LiteralPath $errorPath -File -Filter 'Live2DCubismCore.h' -ErrorAction SilentlyContinue -ErrorVariable +longFilterErrors)
+              $shortItems = @(Get-ChildItem -LiteralPath $errorPath -File -Filter '*' -ErrorAction SilentlyContinue -ErrorVariable +shortFilterErrors)
+            }
             [pscustomobject]@{
+              LongFilterErrorCount = $longFilterErrors.Count
+              ShortFilterErrorCount = $shortFilterErrors.Count
+              ExactHeaderCountAfterEnumeration = @($shortItems | Where-Object { $_.Name -eq 'Live2DCubismCore.h' }).Count
+              PathPlusFilterLength = $errorPath.Length + 1 + 'Live2DCubismCore.h'.Length
               Type = $_.Exception.GetType().FullName
               HResult = $_.Exception.HResult
               PathLength = $errorPath.Length
