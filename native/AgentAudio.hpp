@@ -1,5 +1,5 @@
 #pragma once
-// live2d-agent: single-command synchronization probe, not production queue policy.
+// live2d-agent: audio playback and mouth ownership for local/private runtime.
 #include <windows.h>
 #include <mmsystem.h>
 #include <fstream>
@@ -7,6 +7,7 @@
 #include <string>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <stdexcept>
 #include <Model/CubismModel.hpp>
 #pragma comment(lib, "winmm.lib")
@@ -19,6 +20,7 @@ class AgentAudio {
     std::string id;
     bool prepared = false;
     bool managed = false;
+    bool ephemeral = false;
     ULONGLONG nextPoll = 0;
     ULONGLONG started = 0;
     unsigned previousPosition = 0;
@@ -33,12 +35,20 @@ class AgentAudio {
         out.flush();
     }
     void close() {
+        const std::string finishedId = id;
+        const bool removeLocalCopy = ephemeral;
         if (device) {
             waveOutReset(device);
             if (prepared) waveOutUnprepareHeader(device,&header,sizeof(header));
             waveOutClose(device);
         }
-        device=nullptr; prepared=false; managed=false; header={}; pcm.clear();
+        device=nullptr; prepared=false; managed=false; ephemeral=false; header={}; pcm.clear();
+        if (removeLocalCopy && !finishedId.empty()) {
+            DeleteFileA(("speech/" + finishedId + ".wav").c_str());
+            DeleteFileA(("speech/" + finishedId + ".claimed").c_str());
+            DeleteFileA(("speech/" + finishedId + ".ephemeral").c_str());
+        }
+        id.clear();
     }
     void load() {
         std::ifstream in("speech/" + id + ".wav",std::ios::binary|std::ios::ate);
@@ -84,6 +94,43 @@ public:
     AgentAudio(const AgentAudio&)=delete;
     AgentAudio& operator=(const AgentAudio&)=delete;
     ~AgentAudio() { if(device) status("interrupted"); close(); }
+
+    bool IsBusy() const {
+        return device != nullptr || managed || GetFileAttributesA("speech.ready") != INVALID_FILE_ATTRIBUTES;
+    }
+
+    bool QueueLocalWave(const std::string& sourcePath) {
+        if (IsBusy() || GetFileAttributesA(sourcePath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+        CreateDirectoryA("speech", nullptr);
+        static volatile LONG serial = 0;
+        const unsigned long sequence = static_cast<unsigned long>(InterlockedIncrement(&serial));
+        char candidate[33] = {};
+        sprintf_s(candidate, sizeof(candidate), "%016llx%08lx%08lx",
+            static_cast<unsigned long long>(GetTickCount64()),
+            static_cast<unsigned long>(GetCurrentProcessId()), sequence);
+        const std::string queuedId(candidate);
+        const std::string destination = "speech/" + queuedId + ".wav";
+        const std::string marker = "speech/" + queuedId + ".ephemeral";
+        const std::string tempReady = "speech.ready." + queuedId + ".tmp";
+        if (!CopyFileA(sourcePath.c_str(), destination.c_str(), TRUE)) return false;
+        {
+            std::ofstream markerOut(marker, std::ios::binary | std::ios::trunc);
+            if (!markerOut) { DeleteFileA(destination.c_str()); return false; }
+            markerOut << "1";
+        }
+        {
+            std::ofstream readyOut(tempReady, std::ios::binary | std::ios::trunc);
+            if (!readyOut) {
+                DeleteFileA(destination.c_str()); DeleteFileA(marker.c_str()); return false;
+            }
+            readyOut << queuedId;
+        }
+        if (!MoveFileExA(tempReady.c_str(), "speech.ready", MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            DeleteFileA(tempReady.c_str()); DeleteFileA(destination.c_str()); DeleteFileA(marker.c_str()); return false;
+        }
+        return true;
+    }
+
     void update(Live2D::Cubism::Framework::CubismModel* model,
         const Live2D::Cubism::Framework::csmVector<Live2D::Cubism::Framework::CubismIdHandle>& ids) {
         if (!device && GetTickCount64()>=nextPoll) {
@@ -101,6 +148,7 @@ public:
                     HANDLE f=CreateFileA(claim.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
                     if (f!=INVALID_HANDLE_VALUE) {
                         CloseHandle(f); managed=true;
+                        ephemeral = GetFileAttributesA(("speech/" + id + ".ephemeral").c_str()) != INVALID_FILE_ATTRIBUTES;
                         previousPosition=positionUpdates=0; peakMouth=0;
                         status("accepted");
                         try {
@@ -112,8 +160,8 @@ public:
                             }
                             load();
                         } catch (const std::exception& error) { status(error.what()); close(); }
-                    } else if (GetLastError()==ERROR_FILE_EXISTS) status("duplicate_suppressed");
-                    else { status("claim_failed"); }
+                    } else if (GetLastError()==ERROR_FILE_EXISTS) { status("duplicate_suppressed"); id.clear(); }
+                    else { status("claim_failed"); id.clear(); }
                     DeleteFileA("speech.ready");
                 }
             }
@@ -145,7 +193,6 @@ public:
             } catch(const std::exception& error) { status(error.what()); close(); }
         }
         // Own configured mouth parameters only while playback remains active.
-        // Once playback completes or fails, close() releases ownership immediately.
         if(managed) for(int i=0;i<ids.GetSize();++i) {
             for(int p=0;p<model->GetParameterCount();++p) if(model->GetParameterId(p)==ids[i]) {
                 model->SetParameterValue(p,mouth); break;
