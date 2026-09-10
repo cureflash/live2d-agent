@@ -1,0 +1,54 @@
+name: Windows read-only environment probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-environment-probe.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect session and installed build tools without CeVIO access
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $result = [ordered]@{
+            Kind = 'environment_inventory_not_rendering_validation'
+            ReceivedUtc = [DateTime]::UtcNow.ToString('o')
+            Is64BitProcess = [Environment]::Is64BitProcess
+            UserInteractive = [Environment]::UserInteractive
+            SessionId = (Get-Process -Id $PID).SessionId
+            PowerShellVersion = $PSVersionTable.PSVersion.ToString()
+            CeVIOAccessed = $false
+          }
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $result.VswhereFound = Test-Path -LiteralPath $vswhere -PathType Leaf
+          if ($result.VswhereFound) {
+            $vsJson = & $vswhere -products '*' -format json
+            if ($LASTEXITCODE -ne 0) { throw 'vswhere inventory failed.' }
+            $result.VisualStudio = @($vsJson | ConvertFrom-Json | ForEach-Object {
+              [pscustomobject]@{ Version = $_.installationVersion; Complete = $_.isComplete }
+            })
+            $cppPaths = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+            if ($LASTEXITCODE -ne 0) { throw 'vswhere C++ query failed.' }
+            $result.CppToolchainInstallations = $cppPaths.Count
+          }
+          $result.CMakeOnPath = $null -ne (Get-Command cmake.exe -ErrorAction SilentlyContinue)
+          $result.GitOnPath = $null -ne (Get-Command git.exe -ErrorAction SilentlyContinue)
+          $result.NodeOnPath = $null -ne (Get-Command node.exe -ErrorAction SilentlyContinue)
+          $scanErrors = @()
+          $sdkHeaders = @()
+          foreach ($folder in @('Desktop','Documents','Downloads')) {
+            $root = Join-Path $env:USERPROFILE $folder
+            if (Test-Path -LiteralPath $root -PathType Container) {
+              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'Live2DCubismCore.h' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors)
+            }
+          }
+          $result.CubismCoreHeaderCount = $sdkHeaders.Count
+          $result.SearchErrorCount = $scanErrors.Count
+          $result.SearchScope = 'Desktop Documents Downloads; absence is not proof of no installation'
+          $result | ConvertTo-Json -Depth 5
