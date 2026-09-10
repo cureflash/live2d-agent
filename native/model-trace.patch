@@ -1,24 +1,50 @@
---- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
-+++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
-@@ -17,1 +17,2 @@
- #include "AgentAudio.hpp"
-+#include "AgentModelTrace.hpp"
-@@ -27,1 +28,2 @@
-     AgentAudio _agentAudio;
-+    AgentModelTrace _agentTrace;
 --- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
 +++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
-@@ -394,1 +394,2 @@
+@@ -391,15 +391,18 @@
+         _motionUpdated = _motionManager->UpdateMotion(_model, deltaTimeSeconds); // モーションを更新
+     }
      _model->SaveParameters(); // 状態を保存
 +    _agentTrace.observe(_model, 0);
-@@ -400,1 +401,2 @@
+     //-----------------------------------------------------------------
+ 
+     // 不透明度
+     _opacity = _model->GetModelOpacity();
+ 
      _updateScheduler.OnLateUpdate(_model, deltaTimeSeconds);
 +    _agentTrace.observe(_model, 1);
-@@ -403,1 +405,2 @@
+     _agentAudio.update(_model, _lipSyncIds);
+ 
      _model->Update();
 +    _agentTrace.observe(_model, 2);
-@@ -467,1 +470,3 @@
+ 
+ }
+ 
+@@ -463,7 +466,9 @@
+     {
+         LAppPal::PrintLogLn("[APP]start motion: [%s_%d]", group, no);
+     }
 -    return  _motionManager->StartMotionPriority(motion, autoDelete, priority);
 +    const auto handle = _motionManager->StartMotionPriority(motion, autoDelete, priority);
 +    _agentTrace.motion(handle != InvalidMotionQueueEntryHandleValue);
 +    return handle;
+ }
+ 
+ CubismMotionQueueEntryHandle LAppModel::StartRandomMotion(const csmChar* group, csmInt32 priority,
+--- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
++++ b/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.hpp
+@@ -15,6 +15,7 @@
+ #include "LAppWavFileHandler_Common.hpp"
+ #include "LAppModel_Common.hpp"
+ #include "AgentAudio.hpp"
++#include "AgentModelTrace.hpp"
+ 
+ 
+ /**
+@@ -25,6 +26,7 @@
+ class LAppModel : public LAppModel_Common
+ {
+     AgentAudio _agentAudio;
++    AgentModelTrace _agentTrace;
+ public:
+     /**
+      * @brief コンストラクタ
