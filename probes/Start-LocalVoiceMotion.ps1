@@ -115,49 +115,7 @@ try {
             $answer=Read-Host 'Voice number / e number'
             $preview.Refresh()
             if($preview.HasExited){break}
-            $expressionCommand=[regex]::Match($answer,'^e\s+([0-9]+){$null=$preview.CloseMainWindow();break}
-            if($answer -ne '' -and (-not [int]::TryParse($answer,[ref]$voiceIndex) -or $voiceIndex -lt 0 -or $voiceIndex -ge $voices.Count)){Write-Host 'Invalid voice number.';continue}
-        }
-        $clip=$voices[$voiceIndex]
-        $info=Get-LocalPcmWaveInfo ([string]$clip.WavePath)
-        $id=[guid]::NewGuid().ToString('N')
-        Copy-Item -LiteralPath $clip.WavePath -Destination (Join-Path $speechDir ($id+'.wav'))
-        $ready=Join-Path $instance 'speech.ready'
-        [IO.File]::WriteAllText(($ready+'.tmp'),$id,[Text.Encoding]::ASCII)
-        [IO.File]::Move(($ready+'.tmp'),$ready)
-        $timer=[Diagnostics.Stopwatch]::StartNew()
-        $events=''
-        do {
-            Start-Sleep -Milliseconds 50
-            $preview.Refresh()
-            if($preview.HasExited){throw 'Renderer closed during playback; no retry.'}
-            $path=Join-Path $speechDir ($id+'.status')
-            if(Test-Path -LiteralPath $path){$events=[IO.File]::ReadAllText($path)}
-            if($events -match '(failed|missing|unsupported|timeout|regressed|interrupted|wave_size|wave_header|wave_chunk|riff_size|wave_format|duplicate_data|wave_padding)'){throw 'Native voice playback failed; inspect local status.'}
-            if($timer.Elapsed.TotalSeconds -gt ($info.Seconds+30)){throw 'Voice playback timeout.'}
-        } until($events.Contains('playback_completed'))
-        if(-not $events.Contains('device_position_advanced')){throw 'No advancing audio device position.'}
-        [ordered]@{Id=$id;Clip=$clip.Name;Motion=$motionIndex;PlaybackCompleted=$true;ObservedUtc=[DateTime]::UtcNow.ToString('o');AudibleAndVisual='requires_user_confirmation';CeVIOAccessed=$false} |
-            ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $session 'playback.jsonl') -Encoding UTF8
-        $played++
-        Write-Host 'PLAYBACK_COMPLETED'
-        if($AutomatedSmoke){
-            if(-not $preview.CloseMainWindow() -or -not $preview.WaitForExit(10000)){throw 'Own test window did not close.'}
-            [ordered]@{Kind='local_recorded_voice_native_test';PlaybackCompleted=$true;DevicePositionAdvanced=$true;NativeStatus=$events;StartupMs=$startup.ElapsedMilliseconds;CeVIOAccessed=$false;VoiceIdentityAndMotionQuality='requires_user_confirmation'}|ConvertTo-Json
-            break
-        }
-    }
-    if(-not $preview.WaitForExit(10000)){throw 'Close this model window to finish.'}
-    if($preview.ExitCode -ne 0){throw 'Renderer failed.'}
-} finally {
-    # No access to CeVIO; never stop existing windows or other applications.
-    if($preview.HasExited){
-        [IO.File]::WriteAllText((Join-Path $session 'render.log'),$outputRead.Result)
-        [IO.File]::WriteAllText((Join-Path $session 'render-error.log'),$errorRead.Result)
-        $preview.Dispose()
-    }
-}
-)
+            $expressionCommand=[regex]::Match($answer,'^e\s+([0-9]+)$')
             if($expressionCommand.Success){
                 $expressionIndex=-1
                 if(-not [int]::TryParse($expressionCommand.Groups[1].Value,[ref]$expressionIndex) -or $expressionIndex -ge $expressions.Count){Write-Host 'Invalid expression number.';continue}
