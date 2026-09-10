@@ -193,3 +193,46 @@ jobs:
             & $cmake --help | Select-String -Pattern 'Visual Studio|Ninja'
             if ($LASTEXITCODE -ne 0) { throw 'CMake generator query failed.' }
           }
+
+      - name: Configure unmodified D3D11 sample with installed compiler
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = Join-Path $env:USERPROFILE 'Downloads\CubismSdkForNative-5-r.5.zip'
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) { throw 'Expected SDK archive is absent.' }
+          $expectedHash = '7FF3A4BBC19C0A8728965AA522AB77EB11B252916453E68A8A78D3B71188BB12'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expectedHash) { throw 'SDK archive changed since inspection.' }
+          $probeRoot = Join-Path $env:LOCALAPPDATA ('live2d-agent\probes\' + [Guid]::NewGuid().ToString('N').Substring(0,8))
+          $null = New-Item -ItemType Directory -Path $probeRoot
+          $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+          try {
+            foreach ($entry in $zip.Entries) {
+              $destination = [IO.Path]::GetFullPath((Join-Path $probeRoot $entry.FullName))
+              if (-not $destination.StartsWith($probeRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe archive entry.' }
+            }
+          } finally { $zip.Dispose() }
+          [IO.Compression.ZipFile]::ExtractToDirectory($archive, $probeRoot)
+          $source = Join-Path $probeRoot 'CubismSdkForNative-5-r.5\Samples\D3D11\Demo\proj.d3d11.cmake'
+          $build = Join-Path $probeRoot 'build'
+          $vswhere = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $installation = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+          if ($LASTEXITCODE -ne 0 -or $installation.Count -ne 1) { throw 'Expected exactly one C++ installation.' }
+          $cmake = Join-Path $installation[0] 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+          $ErrorActionPreference = 'Continue'
+          $configureOutput = @(& $cmake -S $source -B $build -G 'Visual Studio 18 2026' -A x64 2>&1)
+          $configureExitCode = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          foreach ($line in $configureOutput) {
+            $safeLine = ([string]$line).Replace($probeRoot, '<probe>').Replace($probeRoot.Replace('\','/'), '<probe>')
+            $safeLine = $safeLine.Replace($env:USERPROFILE, '<user>').Replace($env:USERPROFILE.Replace('\','/'), '<user>')
+            Write-Output $safeLine
+          }
+          [pscustomobject]@{
+            Kind = 'unmodified_sdk_cmake_configuration_not_rendering_validation'
+            ConfigureExitCode = $configureExitCode
+            SDKSourceModified = $false
+            CeVIOAccessed = $false
+            Rendered = $false
+          } | ConvertTo-Json
+          exit $configureExitCode
