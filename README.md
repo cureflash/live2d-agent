@@ -179,3 +179,16 @@ WAVは一意な名前でユーザーの一時フォルダに残す。固定検�
   & "$env:LOCALAPPDATA\live2d-agent\Launch-OfficialSample.cmd"
   ```
 - 公式サンプルのキャラクターと待機動作の目視確認を受けてから、私的な仮モデルの読込みへ進む。サンプルのタップ仕様を製品仕様として採用したものではない。
+
+### 公式サンプル目視確認・私的モデルの配置（2026-09-10）
+
+- ユーザーの画像で公式サンプルキャラクターの表示を確認し、「動いている」との報告を受領。動きの各項目・品質基準・最前面の合格判定とは分ける。
+- [私的モデル配置](https://github.com/cureflash/live2d-agent/actions/runs/34461770086): Desktop内のmodel.model3.json候補は1件。候補複数や探索エラーなら選択せず失敗する。参照37ファイルの存在、モデルフォルダー内に収まる参照、コピー元先のハッシュ一致を確認。元ファイルと設定は変更していない。
+- 公式サンプルがフォルダー名と同名のmodel3.jsonを探索する仕様に従い、別runtimeのResources/model/model.model3.jsonへ配置。既存公式サンプルのResourcesは変更していない。素材・実機パスはGit/Artifactsへ送信していない。
+- 設定には表情22件・Motionグループ9件。Idle/TapBodyグループはない。9件ともJSON Meta.Loop=true、Durationは2.17〜9.67秒。メタデータだけで待機動作や表情の用途を決めない。元のGroups/HitAreas/Motionsも保持し、サンプル用の名前へ勝手に変更しない。
+- [私的モデル起動試験](https://github.com/cureflash/live2d-agent/actions/runs/34461916750): 5.3秒でウィンドウあり・応答false、15.2/25/35.2秒で応答true。45秒まで早期終了なし、自分が起動した試験ウィンドウのみCloseMainWindowで終了、終了コード0。モデルが正しく見える証拠はまだなく、描画・動作の目視は確認待ち。
+- 起動方法:
+  ```powershell
+  & "$env:LOCALAPPDATA\live2d-agent\Launch-PrivateModel.cmd"
+  ```
+- CeVIO接続なし。待機モーション割当・タップ反応・最前面・通知・発話同期は未実装。元データ固有のパラメーターIDをアプリ本体へ追加していない。
