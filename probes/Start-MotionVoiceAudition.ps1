@@ -37,7 +37,8 @@ $runtime = Join-Path $base ('audition-' + [guid]::NewGuid().ToString('N'))
 Copy-Item -LiteralPath $source -Destination $runtime -Recurse
 $entry = [pscustomobject]@{ File = [string]$choices[$selected].Entry.File }
 $config.FileReferences.Motions | Add-Member -MemberType NoteProperty -Name Idle -Value @($entry) -Force
-$config | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath (Join-Path $runtime $configRelative) -Encoding UTF8
+$json = $config | ConvertTo-Json -Depth 50
+[IO.File]::WriteAllText((Join-Path $runtime $configRelative), $json, (New-Object Text.UTF8Encoding($false)))
 Write-Host 'The selected motion repeats for inspection. Close this new window when finished.'
 Write-Host 'Existing model windows are not closed. Speech is an independent test, without synchronized lip sync.'
 $preview = Start-Process -FilePath (Join-Path $runtime 'Demo.exe') -WorkingDirectory $runtime -PassThru
