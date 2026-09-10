@@ -3,6 +3,7 @@ param([switch]$AutomatedSmoke,[switch]$PrepareOnly)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'LocalPcmWave.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'CubismJsonImport.psm1') -Force
 $base=Join-Path $env:LOCALAPPDATA 'live2d-agent'
 $built=Get-Content -LiteralPath (Join-Path $base 'sync-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $bank=Get-Content -LiteralPath (Join-Path $base 'madoka-voice-bank.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -50,6 +51,7 @@ foreach($group in $config.FileReferences.Motions.PSObject.Properties){
 }
 $config.FileReferences.Motions | Add-Member -MemberType NoteProperty -Name Idle -Value @([pscustomobject]@{File=$motions[$motionIndex].File}) -Force
 [IO.File]::WriteAllText((Join-Path $instance $configRelative),($config|ConvertTo-Json -Depth 50),(New-Object Text.UTF8Encoding($false)))
+Convert-PrivateModelJson (Join-Path $instance 'Resources\model')
 $preview=New-Object Diagnostics.Process
 $preview.StartInfo.FileName=Join-Path $instance 'Demo.exe'
 $preview.StartInfo.WorkingDirectory=$instance
