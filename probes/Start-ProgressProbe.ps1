@@ -13,6 +13,7 @@ $sessionPointer = Join-Path $base 'progress-session.json'
 # A test session is explicit and one-shot; this is not a production pause policy.
 $lockPath = Join-Path $base 'sync-probe.lock'
 $lock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+$worker=$null
 try {
     if (-not $AutomatedSmoke) {
         Write-Host 'Single-stream progress test. Keep CeVIO free until this test is finished.'
