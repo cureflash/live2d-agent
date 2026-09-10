@@ -28,8 +28,9 @@ try {
     $stage = 'SelectCast'
     $casts = @([CeVIO.Talk.RemoteService.Talker]::AvailableCasts)
     if ($casts -notcontains $Cast) { throw 'Requested cast is unavailable.' }
-    $talker = New-Object CeVIO.Talk.RemoteService.Talker
-    $talker.Cast = $Cast
+    # DLL 2.1.4.0 exposes .ctor(string cast = ""), not a zero-argument constructor.
+    # Pass the argument explicitly for Windows PowerShell New-Object.
+    $talker = New-Object -TypeName CeVIO.Talk.RemoteService.Talker -ArgumentList $Cast
     $talker.Volume = 50
     $talker.Speed = 50
     $talker.Tone = 50
