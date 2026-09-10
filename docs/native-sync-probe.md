@@ -45,8 +45,22 @@ No new connection to CeVIO was made by setup/build/synthetic-audio test jobs.
 
 ## Still unverified or unimplemented
 Actual Sasara/native lip-sync visual and audible acceptance; topmost visual acceptance; device-loss and interrupted-speech mouth-reset acceptance; after-exit other-app CeVIO use; end-to-end notification latency. ActualAudioOnsetMs remains null; startup and worker timings are separate. No 10-second guarantee.
-Web Work one-shot delivery is prepared but has not yet been exercised with this receiver. Codex delivery remains separately unverified and no automatic Codex event hook has been configured.
+Web Work one-shot delivery succeeded on 2026-09-10 in run 34465490986; native playback completed and the user confirmed audible speech. Visual mouth synchronization is still unconfirmed. Codex delivery remains separately unverified and no automatic Codex event hook has been configured.
 Continuous progress input, active-plus-latest-pending production queue, pause/resume and sleep/restart policy, tap arbitration, expressions/gesture selection and quality acceptance remain unfinished. These require their existing unresolved decisions; this probe does not settle them.
 SDK/model/audio binaries and private runtime diagnostics remain on Windows and are not committed or uploaded.
 Playback position API: https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveoutgetposition
 Playback completion flag: https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveoutwrite
+
+## Web Work → GitHub → Windows → CS7 → native playback result
+
+[Run 34465490986](https://github.com/cureflash/live2d-agent/actions/runs/34465490986), commit `7fd445d81258e2d30f25a88c220602a72ef0c61e`, job 102832967193 succeeded. The user explicitly opened the receiver and confirmed CeVIO availability with FREE. One fixed nonprivate sentence was sent before this assistant turn's final answer.
+
+- Command ID: `7e49f20c084e43ad9b0d8256d09f2f54`.
+- Sender timestamp: 2026-09-10T10:19:53.848Z.
+- Delivery log: 2026-09-10T10:20:03.7969561Z.
+- Native playback-completion observation: 2026-09-10T10:20:14.9925069Z.
+- Sender timestamp to delivery log: about 9.95 seconds; to playback-completion observation: about 21.14 seconds. These compare different machines' clocks without offset calibration. Neither is notification-to-audible-onset latency.
+- The interactive worker synthesized the command and the native renderer recorded playback completion. The user then reported “しゃべったで”, confirming audible speech.
+- The delivery job itself did not access CeVIO or launch/own the renderer. No host close/restart was requested.
+- Mouth movement and voice alignment are not yet confirmed by this user report. Topmost visual acceptance, continuous notification behavior, source-specific Codex integration, and all remaining production policies are not established by this one-command result.
+- No new recording or private diagnostics were uploaded. Only the fixed test sentence, ID and stage/timing metadata are public.
