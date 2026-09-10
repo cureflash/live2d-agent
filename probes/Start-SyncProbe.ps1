@@ -24,7 +24,15 @@ try {
     $speechDir = Join-Path $instance 'speech'
     Get-ChildItem -LiteralPath $speechDir -File | Remove-Item -Force
     Remove-Item -LiteralPath (Join-Path $instance 'speech.ready') -ErrorAction SilentlyContinue
-    $preview = Start-Process -FilePath (Join-Path $instance 'Demo.exe') -WorkingDirectory $instance -PassThru -RedirectStandardOutput (Join-Path $session 'render.log') -RedirectStandardError (Join-Path $session 'render-error.log')
+    $preview = New-Object Diagnostics.Process
+    $preview.StartInfo.FileName = Join-Path $instance 'Demo.exe'
+    $preview.StartInfo.WorkingDirectory = $instance
+    $preview.StartInfo.UseShellExecute = $false
+    $preview.StartInfo.RedirectStandardOutput = $true
+    $preview.StartInfo.RedirectStandardError = $true
+    if (-not $preview.Start()) { throw 'Renderer process start failed.' }
+    $outputRead = $preview.StandardOutput.ReadToEndAsync()
+    $errorRead = $preview.StandardError.ReadToEndAsync()
     $startup = [Diagnostics.Stopwatch]::StartNew()
     do {
         Start-Sleep -Milliseconds 250
@@ -74,6 +82,9 @@ try {
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'result.json') -Encoding UTF8
     Write-Host 'PLAYBACK_COMPLETED. Please check audible speech and mouth movement; close the model when finished.'
     $preview.WaitForExit()
+    [IO.File]::WriteAllText((Join-Path $session 'render.log'), $outputRead.Result)
+    [IO.File]::WriteAllText((Join-Path $session 'render-error.log'), $errorRead.Result)
+    if ($preview.ExitCode -ne 0) { throw 'Renderer exited with an error.' }
 } finally {
     if (Test-Path -LiteralPath $sessionPointer) {
         $pointer = Get-Content -LiteralPath $sessionPointer -Raw -Encoding UTF8 | ConvertFrom-Json
