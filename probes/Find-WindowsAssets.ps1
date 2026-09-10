@@ -27,7 +27,7 @@ $modelRoots = @(
  [Environment]::GetFolderPath('MyDocuments'),
  (Join-Path $env:USERPROFILE 'Downloads')
 ) + $AdditionalModelRoots
-$matches = @()
+$modelCandidates = @()
 foreach ($modelRoot in ($modelRoots | Where-Object { $_ } | Select-Object -Unique)) {
  if (-not (Test-Path -LiteralPath $modelRoot -PathType Container)) { continue }
  # Traverse explicitly to skip junctions/symlinks and avoid leaving requested roots.
@@ -41,7 +41,7 @@ foreach ($modelRoot in ($modelRoots | Where-Object { $_ } | Select-Object -Uniqu
    if (($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
    if ($child.PSIsContainer) { $stack.Push($child.FullName); continue }
    if ($child.Name -match '\.(moc3?|mtn|cmo3|cmox)$|\.model3?\.json$') {
-    $matches += [pscustomobject]@{Path=$child.FullName; Bytes=$child.Length}
+    $modelCandidates += [pscustomobject]@{Path=$child.FullName; Bytes=$child.Length}
    }
   }
  }
@@ -55,7 +55,7 @@ foreach ($modelRoot in ($modelRoots | Where-Object { $_ } | Select-Object -Uniqu
  PowerShellVersion=$PSVersionTable.PSVersion.ToString()
  InstalledApplications=$apps
  SearchedModelRoots=$modelRoots
- ModelCandidates=$matches
+ ModelCandidates=$modelCandidates
  DiscoveryErrors=@($discoveryErrors.ToArray())
  Limitations=@('Only uninstall registry and named folders searched.', 'No match does not mean not installed.', 'Nox internal files were not inspected.', 'Audio endpoint, CeVIO license and SDK compatibility not tested.')
 } | ConvertTo-Json -Depth 6
