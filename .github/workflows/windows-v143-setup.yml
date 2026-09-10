@@ -1,0 +1,51 @@
+name: Windows v143 setup
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-v143-setup.yml']
+permissions:
+  contents: read
+concurrency:
+  group: live2d-agent-v143-setup
+  cancel-in-progress: false
+jobs:
+  setup:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 30
+    steps:
+      - name: Inspect v143 installation prerequisites
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $componentId = 'Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64'
+          $installerRoot = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer'
+          $vswhere = Join-Path $installerRoot 'vswhere.exe'
+          $instances = @((& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json) | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0 -or $instances.Count -ne 1) { throw 'Expected exactly one C++ installation.' }
+          $instance = $instances[0]
+          $catalogPath = Join-Path $env:ProgramData ('Microsoft\VisualStudio\Packages\_Instances\' + $instance.instanceId + '\catalog.json')
+          $catalogExists = Test-Path -LiteralPath $catalogPath -PathType Leaf
+          $component = @()
+          if ($catalogExists) {
+            $catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
+            $component = @($catalog.packages | Where-Object { $_.id -eq $componentId })
+          }
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+          $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          $toolsRoot = Join-Path $instance.installationPath 'VC\Tools\MSVC'
+          [pscustomobject]@{
+            Kind = 'v143_setup_preflight'
+            IsAdministrator = $isAdmin
+            VisualStudioVersion = $instance.installationVersion
+            ChannelId = $instance.channelId
+            ProductId = $instance.productId
+            CatalogExists = $catalogExists
+            ComponentInCatalog = $component.Count -gt 0
+            ComponentId = $componentId
+            InstalledToolsets = @(Get-ChildItem -LiteralPath $toolsRoot -Directory | Select-Object -ExpandProperty Name)
+            InstallerExists = Test-Path -LiteralPath (Join-Path $installerRoot 'setup.exe') -PathType Leaf
+            CeVIOAccessed = $false
+          } | ConvertTo-Json -Depth 4
