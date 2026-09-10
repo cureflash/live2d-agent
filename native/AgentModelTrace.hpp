@@ -8,7 +8,6 @@
 #include <Model/CubismModel.hpp>
 #include <Id/CubismId.hpp>
 #include <Motion/CubismMotionJson.hpp>
-#include <Utils/CubismJson.hpp>
 class AgentModelTrace {
     bool enabled=false, initialized=false;
     ULONGLONG start=0;
@@ -23,14 +22,6 @@ public:
         std::ofstream out("motion-input.tsv",std::ios::app);
         out<<name<<"\tbytes="<<size<<"\tbuffer="<<(buffer!=nullptr);
         if(buffer){
-            // Public parser API, bounded diagnostic process only.
-            const unsigned char empty[]={'{','}'};
-            auto raw=Live2D::Cubism::Framework::Utils::CubismJson::Create(empty,2);
-            if(raw){
-                const bool parsed=raw->ParseBytes(buffer,size);
-                out<<"\tparsed="<<parsed<<"\tparse_error="<<(raw->GetParseError()?raw->GetParseError():"none");
-                Live2D::Cubism::Framework::Utils::CubismJson::Delete(raw);
-            }
             Live2D::Cubism::Framework::CubismMotionJson json(buffer,size);
             out<<"\tvalid="<<json.IsValid();
             if(json.IsValid())out<<"\tconsistent="<<json.HasConsistency();
