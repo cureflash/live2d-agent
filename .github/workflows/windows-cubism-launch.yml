@@ -1,0 +1,58 @@
+name: Windows Cubism launch probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-cubism-launch.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 2
+    steps:
+      - name: Launch only the built official sample and close its test window
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+          $state = Get-Content -LiteralPath (Join-Path $base 'sample-build.json') -Raw | ConvertFrom-Json
+          $exe = [IO.Path]::GetFullPath($state.Executable)
+          if (-not $exe.StartsWith($base + '\render-', [StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName($exe) -ne 'Demo.exe') { throw 'Unexpected sample executable location.' }
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Built sample is missing.' }
+          $process = Start-Process -FilePath $exe -WorkingDirectory $state.WorkingDirectory -PassThru
+          $timer = [Diagnostics.Stopwatch]::StartNew()
+          $windowSeen = $false
+          $responsive = $false
+          while ($timer.Elapsed.TotalSeconds -lt 12) {
+            $process.Refresh()
+            if ($process.HasExited) { break }
+            if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
+              $windowSeen = $true
+              $responsive = $process.Responding
+            }
+            Start-Sleep -Milliseconds 250
+          }
+          $exitedEarly = $process.HasExited
+          $earlyCode = $null
+          if ($exitedEarly) { $earlyCode = $process.ExitCode }
+          $closeRequested = $false
+          $closed = $exitedEarly
+          if (-not $exitedEarly) {
+            $closeRequested = $process.CloseMainWindow()
+            $closed = $process.WaitForExit(10000)
+          }
+          [pscustomobject]@{
+            Kind = 'sample_window_lifecycle_not_visual_validation'
+            WindowObserved = $windowSeen
+            Responsive = $responsive
+            ExitedBeforeTestEnd = $exitedEarly
+            EarlyExitCode = $earlyCode
+            CloseRequested = $closeRequested
+            Closed = $closed
+            FinalExitCode = $(if ($closed) { $process.ExitCode } else { $null })
+            VisualAppearance = 'requires_user_confirmation'
+            CeVIOAccessed = $false
+          } | ConvertTo-Json
+          if (-not $windowSeen -or -not $responsive -or $exitedEarly -or -not $closed -or $process.ExitCode -ne 0) { exit 1 }
