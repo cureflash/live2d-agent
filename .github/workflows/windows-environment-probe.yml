@@ -48,7 +48,7 @@ jobs:
           foreach ($folder in @('Desktop','Documents','Downloads')) {
             $root = Join-Path $env:USERPROFILE $folder
             if (Test-Path -LiteralPath $root -PathType Container) {
-              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'Live2DCubismCore.h' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors)
+              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*Cubism*' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors | Where-Object { $_.Name -eq 'Live2DCubismCore.h' })
             }
           }
           $additionalCandidates = @()
