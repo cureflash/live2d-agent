@@ -1,0 +1,65 @@
+name: Windows private model launch probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-private-launch.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 2
+    steps:
+      - name: Launch staged private model and close only its test window
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+          $state = Get-Content -LiteralPath (Join-Path $base 'private-model.json') -Raw | ConvertFrom-Json
+          $exe = [IO.Path]::GetFullPath($state.Executable)
+          if (-not $exe.StartsWith($base + '\private-', [StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName($exe) -ne 'Demo.exe') { throw 'Unexpected sample executable location.' }
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Built sample is missing.' }
+          $process = Start-Process -FilePath $exe -WorkingDirectory $state.WorkingDirectory -PassThru
+          $timer = [Diagnostics.Stopwatch]::StartNew()
+          $windowSeen = $false
+          $responsive = $false
+          $observations = @()
+          $nextObservation = 5
+          while ($timer.Elapsed.TotalSeconds -lt 45) {
+            $process.Refresh()
+            if ($process.HasExited) { break }
+            if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
+              $windowSeen = $true
+              $responsive = $process.Responding
+            }
+            if ($timer.Elapsed.TotalSeconds -ge $nextObservation) {
+              $observations += [pscustomobject]@{ Seconds = [math]::Round($timer.Elapsed.TotalSeconds,1); HasWindow = ($process.MainWindowHandle -ne [IntPtr]::Zero); Responsive = $process.Responding; CpuSeconds = $process.TotalProcessorTime.TotalSeconds }
+              $nextObservation += 10
+            }
+            Start-Sleep -Milliseconds 250
+          }
+          $exitedEarly = $process.HasExited
+          $earlyCode = $null
+          if ($exitedEarly) { $earlyCode = $process.ExitCode }
+          $closeRequested = $false
+          $closed = $exitedEarly
+          if (-not $exitedEarly) {
+            $closeRequested = $process.CloseMainWindow()
+            $closed = $process.WaitForExit(10000)
+          }
+          [pscustomobject]@{
+            Kind = 'private_model_window_lifecycle_not_visual_validation'
+            Observations = $observations
+            WindowObserved = $windowSeen
+            Responsive = $responsive
+            ExitedBeforeTestEnd = $exitedEarly
+            EarlyExitCode = $earlyCode
+            CloseRequested = $closeRequested
+            Closed = $closed
+            FinalExitCode = $(if ($closed) { $process.ExitCode } else { $null })
+            VisualAppearance = 'requires_user_confirmation'
+            CeVIOAccessed = $false
+          } | ConvertTo-Json -Depth 4
+          if (-not $windowSeen -or -not $responsive -or $exitedEarly -or -not $closed -or $process.ExitCode -ne 0) { exit 1 }
