@@ -8,12 +8,12 @@ permissions:
   contents: read
 concurrency:
   group: live2d-agent-v143-setup
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   setup:
     if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Windows, X64, live2d-agent]
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - name: Inspect v143 installation prerequisites
         shell: powershell
@@ -54,3 +54,38 @@ jobs:
             InstallerExists = Test-Path -LiteralPath (Join-Path $installerRoot 'setup.exe') -PathType Leaf
             CeVIOAccessed = $false
           } | ConvertTo-Json -Depth 4
+
+      - name: Add approved v143 component with installer-only UAC elevation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $componentId = 'Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64'
+          $installerRoot = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer'
+          $vswhere = Join-Path $installerRoot 'vswhere.exe'
+          $installed = @(& $vswhere -products '*' -requires $componentId -property installationPath)
+          if ($LASTEXITCODE -ne 0) { throw 'Component inventory failed.' }
+          if ($installed.Count -gt 0) {
+            Write-Output 'V143_ALREADY_REGISTERED'
+            exit 0
+          }
+          $instances = @((& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json) | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0 -or $instances.Count -ne 1) { throw 'Expected exactly one C++ installation.' }
+          $instance = $instances[0]
+          if ($instance.channelId -ne 'VisualStudio.18.Release' -or $instance.productId -ne 'Microsoft.VisualStudio.Product.BuildTools') { throw 'Installer target changed.' }
+          $installer = Join-Path $installerRoot 'setup.exe'
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*O=Microsoft Corporation*') { throw 'Microsoft installer signature check failed.' }
+          $arguments = 'modify --installPath "' + $instance.installationPath + '" --channelId VisualStudio.18.Release --add ' + $componentId + ' --passive --norestart'
+          try {
+            $process = Start-Process -FilePath $installer -ArgumentList $arguments -WorkingDirectory $env:TEMP -Verb RunAs -PassThru -Wait
+          } catch {
+            Write-Output ('INSTALLER_LAUNCH_FAILED ' + $_.Exception.GetType().FullName)
+            exit 1
+          }
+          [pscustomobject]@{ Kind = 'v143_installer_result'; InstallerExitCode = $process.ExitCode; RestartRequested = ($process.ExitCode -eq 3010); CeVIOAccessed = $false } | ConvertTo-Json
+          if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) { exit 1 }
+          $installed = @(& $vswhere -products '*' -requires $componentId -property installationPath)
+          if ($LASTEXITCODE -ne 0 -or $installed.Count -ne 1) { throw 'v143 registration not confirmed after installer exit.' }
+          $versions = @(Get-ChildItem -LiteralPath (Join-Path $installed[0] 'VC\Tools\MSVC') -Directory | Select-Object -ExpandProperty Name)
+          [pscustomobject]@{ ComponentRegistered = $true; InstalledToolsets = $versions } | ConvertTo-Json
+          if (@($versions | Where-Object { $_ -like '14.44.*' }).Count -eq 0) { throw 'v143 toolset directory not found.' }
