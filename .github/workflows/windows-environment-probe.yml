@@ -48,13 +48,60 @@ jobs:
           foreach ($folder in @('Desktop','Documents','Downloads')) {
             $root = Join-Path $env:USERPROFILE $folder
             if (Test-Path -LiteralPath $root -PathType Container) {
-              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'Live2DCubismCore.h' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors)
+              $sdkHeaders += @(Get-ChildItem -LiteralPath $root -Recurse -File -Include 'Live2DCubismCore.h','Live2DCubismCore.lib','*Cubism*SDK*.zip','CubismEditor*.exe' -ErrorAction SilentlyContinue -ErrorVariable +scanErrors)
             }
           }
-          $result.CubismCoreHeaderCount = $sdkHeaders.Count
-          $result.SearchErrorCount = $scanErrors.Count
-          $result.SearchErrorTypes = @($scanErrors | Group-Object { $_.Exception.GetType().FullName } | ForEach-Object {
-            [pscustomobject]@{ Type = $_.Name; Count = $_.Count }
+          $result.SdkCandidateTypes = @($sdkHeaders | Group-Object Extension | ForEach-Object {
+            [pscustomobject]@{ Extension = $_.Name; Count = $_.Count }
           })
+          $result.SearchErrorCount = $scanErrors.Count
+          $result.SearchErrorDetails = @($scanErrors | ForEach-Object {
+            $errorPath = [string]$_.TargetObject
+            $exists = $null
+            $parentExists = $null
+            $reparse = $null
+            if ($errorPath) {
+              $exists = Test-Path -LiteralPath $errorPath -ErrorAction SilentlyContinue
+              $parentPath = Split-Path -LiteralPath $errorPath -ErrorAction SilentlyContinue
+              if ($parentPath) { $parentExists = Test-Path -LiteralPath $parentPath -ErrorAction SilentlyContinue }
+              $item = Get-Item -LiteralPath $errorPath -Force -ErrorAction SilentlyContinue
+              if ($null -ne $item) { $reparse = ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 }
+            }
+            [pscustomobject]@{
+              Type = $_.Exception.GetType().FullName
+              HResult = $_.Exception.HResult
+              PathLength = $errorPath.Length
+              LongestComponent = ($errorPath.Split('\') | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum
+              ExistsOnRecheck = $exists
+              ParentExists = $parentExists
+              ReparsePoint = $reparse
+            }
+          })
+          $appErrors = @()
+          $result.CubismRegisteredApplications = @(
+            foreach ($registryRoot in @(
+              'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+              'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+              'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            )) {
+              Get-ItemProperty -Path $registryRoot -ErrorAction SilentlyContinue -ErrorVariable +appErrors |
+                Where-Object { $_.DisplayName -like '*Cubism*' -or $_.DisplayName -like '*Live2D*' } |
+                ForEach-Object { [pscustomobject]@{ Name = $_.DisplayName; Version = $_.DisplayVersion } }
+            }
+          )
+          $result.RegistrySearchErrorCount = $appErrors.Count
+          $result.InstallRootCandidates = @(
+            foreach ($installRoot in @($env:ProgramFiles, [Environment]::GetEnvironmentVariable('ProgramFiles(x86)'), (Join-Path $env:LOCALAPPDATA 'Programs'))) {
+              if (Test-Path -LiteralPath $installRoot -PathType Container) {
+                $namedDirs = @(Get-ChildItem -LiteralPath $installRoot -Directory -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -like '*Live2D*' -or $_.Name -like '*Cubism*' })
+                foreach ($namedDir in $namedDirs) {
+                  $installScanErrors = @()
+                  $headers = @(Get-ChildItem -LiteralPath $namedDir.FullName -Recurse -File -Filter 'Live2DCubismCore.h' -ErrorAction SilentlyContinue -ErrorVariable +installScanErrors)
+                  [pscustomobject]@{ DirectoryName = $namedDir.Name; CoreHeaderCount = $headers.Count; ErrorCount = $installScanErrors.Count }
+                }
+              }
+            }
+          )
           $result.SearchScope = 'Desktop Documents Downloads; absence is not proof of no installation'
           $result | ConvertTo-Json -Depth 5
