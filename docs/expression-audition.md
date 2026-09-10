@@ -21,6 +21,10 @@ No CeVIO access; no game assets, model files or decoded voice files are committe
 
 Native expression build completed in run 34484339211; the subsequent launcher parse gate failed due to replacement-string expansion during source generation. The launcher source was corrected in commit 896a4f0348fd7858b8ffa1b25cc42f3f8b754e98.
 
-Verification run 34484628263 / job 102895673864 started on the private Windows runner at 2026-09-10T13:45:34Z. GitHub still reports the script step in progress beyond its five-minute job timeout, and completed logs are unavailable. Whether the runner disconnected, Windows paused or the process stalled has not been established.
+Verification run 34484628263 / job 102895673864 ended cancelled. Its completed log records expression indices 0 through 8 evaluated, followed by an IOException reading a native status file while the native process had it open for appending. Launcher installation was not reached. This is a status-reader sharing failure, not evidence that expression rendering failed.
 
-Do not mark expression runtime verification or launcher installation complete. User confirmation of the runner console state is required to diagnose the stalled verification.
+The user subsequently confirmed visible expression changes and previously confirmed body movement and recorded audio. This does not establish visual acceptance of all 22 expressions, expression meanings, or mouth appearance.
+
+Commit becf15001dd4275a6f59212b410b80e1ac8af681 corrects the status reader to open append-only native status files with FileShare.ReadWrite and consume only newline-terminated records. This applies to both expression and audio status reads; no exception suppression or automatic replay is added.
+
+Regression run 34485959766 is queued to evaluate every expression, reject an out-of-range index, complete one recorded voice playback, and install the launcher only after success. Runtime regression and installation remain pending.
