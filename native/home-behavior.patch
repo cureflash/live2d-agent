@@ -62,7 +62,7 @@
      if (_motionManager->IsFinished())
      {
          // モーションの再生がない場合、待機モーションの中からランダムで再生する
-@@ -402,11 +431,18 @@
+@@ -402,9 +431,16 @@
      _agentExpression.before(_model);
      _updateScheduler.OnLateUpdate(_model, deltaTimeSeconds);
      _agentExpression.after(_model);
@@ -70,7 +70,6 @@
      _agentAudio.update(_model, _lipSyncIds);
  
      _model->Update();
-     _agentTrace.observe(_model, 2);
  
  }
 +
