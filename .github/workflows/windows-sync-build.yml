@@ -33,7 +33,7 @@ jobs:
             if (-not $cmakeText.Contains($needle)) { throw 'SDK CMake source differs.' }
             $cmakeText = $cmakeText.Replace($needle, ('set(SDK_ROOT_PATH "' + $built.SDKRoot.Replace('\','/') + '")'))
             [IO.File]::WriteAllText((Join-Path $source 'CMakeLists.txt'), $cmakeText, (New-Object Text.UTF8Encoding($false)))
-            $pin = 'e56cd0db3f36f533b68b7a92ab53422ef13d60bc'
+            $pin = 'e1e948899c75e60baddc07098acfc4303fa8f9d6'
             Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $pin + '/native/AgentAudio.hpp') -OutFile (Join-Path $source 'src\AgentAudio.hpp')
             Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $pin + '/native/sdk-integration.patch') -OutFile (Join-Path $work 'integration.patch')
             & git -C $work apply --check --ignore-space-change (Join-Path $work 'integration.patch') 2>&1 | Out-File (Join-Path $work 'patch-check.log')
