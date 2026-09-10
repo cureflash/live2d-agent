@@ -43,7 +43,15 @@ jobs:
                 $writer.Write([int16]$value)
               }
             } finally { $writer.Dispose(); $file.Dispose() }
-            $preview = Start-Process -FilePath (Join-Path $runtime 'Demo.exe') -WorkingDirectory $runtime -PassThru -RedirectStandardOutput (Join-Path $runtime 'render.log') -RedirectStandardError (Join-Path $runtime 'render-error.log')
+            $preview = New-Object Diagnostics.Process
+            $preview.StartInfo.FileName = Join-Path $runtime 'Demo.exe'
+            $preview.StartInfo.WorkingDirectory = $runtime
+            $preview.StartInfo.UseShellExecute = $false
+            $preview.StartInfo.RedirectStandardOutput = $true
+            $preview.StartInfo.RedirectStandardError = $true
+            if (-not $preview.Start()) { throw 'Renderer process start failed.' }
+            $outputRead = $preview.StandardOutput.ReadToEndAsync()
+            $errorRead = $preview.StandardError.ReadToEndAsync()
             $timer = [Diagnostics.Stopwatch]::StartNew()
             do {
               Start-Sleep -Milliseconds 250
