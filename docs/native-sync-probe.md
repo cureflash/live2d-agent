@@ -37,7 +37,8 @@ The public repository must contain only a nonprivate fixed test payload, never a
 ## Technical verification and limits
 Native build: Actions run 34464486146 succeeded.
 Initial device tests reached accepted → playback submitted → device position advanced → playback completed → duplicate suppressed. They failed their final lifecycle gate because CloseRequested, WaitReturned and HasExited were true but the PowerShell Start-Process returned object's ExitCode was null.
-The test and launcher now own a System.Diagnostics.Process directly and drain its redirected streams asynchronously. The exit-code gate is retained, not relaxed. Its rerun result must be checked before calling the smoke test successful.
+The test and launcher now own a System.Diagnostics.Process directly and drain its redirected streams asynchronously. The exit-code gate is retained, not relaxed. Rerun [34465000564](https://github.com/cureflash/live2d-agent/actions/runs/34465000564) succeeded: close request/wait/exit all confirmed, exit code 0. Window readiness was 16,958 ms in this run. Native receipt to submission was 31 ms; submission to first observed device-position advance was 31 ms. These are local test-tone timings, not notification-to-audible-speech latency. The device reported 119 position advances and a peak computed mouth value of about 0.174. One submission occurred despite a duplicate ready command. Restart suppression, missing-input failure, and physical mouth closure have not yet been regression-tested.
+Latest script setup run 34465004491 succeeded. No CeVIO API was called by these jobs.
 
 Synthesis worker and launcher scripts are installed and syntax-checked on Windows. The new synthesis worker's full execution with CeVIO and native renderer still requires the interactive test.
 No new connection to CeVIO was made by setup/build/synthetic-audio test jobs.
