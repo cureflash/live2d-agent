@@ -32,6 +32,7 @@ try {
         if ($preview.HasExited) { throw 'Renderer exited before readiness.' }
         if ($startup.Elapsed.TotalSeconds -gt 60) { throw 'Renderer window readiness timeout.' }
     } until ($preview.MainWindowHandle -ne 0 -and $preview.Responding)
+    $startup.Stop()
     $commandPath = Join-Path $session 'command.json'
     if ($WaitForNotification) {
         $self = Get-Process -Id $PID
