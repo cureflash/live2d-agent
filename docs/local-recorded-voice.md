@@ -34,7 +34,15 @@ Choose a motion number (Enter = 0), wait for the model window, then choose a voi
 
 Read-only Windows inventory: 43 HCA candidates found in an existing export, no scan errors. Filenames correspond to the provisional model's character ID. File existence and names alone do not confirm the audible speaker or line content.
 
-The setup workflow is responsible for validating every decoded WAV, preflight of every motion/voice path, and a bounded native playback test using one actual recorded clip. Run results are tracked separately; implementation is not evidence of completed playback.
+Windows setup run 34480456440 / job 102881638959 succeeded on 2026-09-10:
+- 43 source clips decoded and PCM-validated; 9 motion files passed preflight.
+- One actual clip reached native playback completion, with 1,207 advancing position observations and peak mouth opening 0.858527.
+- Window readiness measurement: 13,242 ms (not notification-to-audio latency).
+- Native playback submitted-to-completed interval: 22,516 ms. Actual audible onset was not measured.
+- CeVIO was not accessed. The test closed only its own model window normally.
+- The installed launcher is ready for the user's audible and visual acceptance.
+
+These measurements do not verify all 43 audible clips or the semantic/visual suitability of the selected motion. Detailed file locations and decoder logs remain only on Windows.
 
 ## Still unconfirmed
 
