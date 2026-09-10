@@ -27,4 +27,8 @@ The user subsequently confirmed visible expression changes and previously confir
 
 Commit becf15001dd4275a6f59212b410b80e1ac8af681 corrects the status reader to open append-only native status files with FileShare.ReadWrite and consume only newline-terminated records. This applies to both expression and audio status reads; no exception suppression or automatic replay is added.
 
-Regression run 34485959766 is queued to evaluate every expression, reject an out-of-range index, complete one recorded voice playback, and install the launcher only after success. Runtime regression and installation remain pending.
+Regression run 34485959766 ended cancelled. Its log records indices 0 through 3 evaluated, followed by an expression acknowledgement timeout. The cause of that timeout is not established; launcher installation was not reached.
+
+After the user restarted the notification runner, run 34490021594 / job 102914029281 was issued. The user confirmed audible recorded voice and visible expression changes, but reported no pose change. This expression smoke test holds motion index 0 as the looping Idle motion; it does not cycle body motion indices. The observation does not establish whether the selected motion itself was animating.
+
+GitHub still reported this run in progress at the latest check. Complete 22-expression regression and launcher installation remain unconfirmed until the completed log is available.
