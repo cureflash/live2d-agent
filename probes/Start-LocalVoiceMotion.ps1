@@ -5,6 +5,22 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'LocalPcmWave.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'CubismJsonImport.psm1') -Force
+# Native status files are append-only while playback/expression evaluation runs.
+# Readers must permit the native writer to remain open and append.
+function Read-NativeStatus([string]$Path){
+    $stream=[IO.File]::Open($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
+    $reader=$null
+    try{
+        $reader=New-Object IO.StreamReader($stream)
+        $text=$reader.ReadToEnd()
+        # Consume completed records only; an append may still be in progress.
+        $lastNewline=$text.LastIndexOf([char]10)
+        if($lastNewline -lt 0){return ''}
+        return $text.Substring(0,$lastNewline+1)
+    }finally{
+        if($null -ne $reader){$reader.Dispose()}else{$stream.Dispose()}
+    }
+}
 $base=Join-Path $env:LOCALAPPDATA 'live2d-agent'
 $built=Get-Content -LiteralPath (Join-Path $base 'expression-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $bank=Get-Content -LiteralPath (Join-Path $base 'madoka-voice-bank.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -89,7 +105,7 @@ try {
             $preview.Refresh()
             if($preview.HasExited){throw 'Renderer closed during expression selection.'}
             $statusPath=Join-Path $expressionDir ($commandId+'.status')
-            if(Test-Path -LiteralPath $statusPath){$status=[IO.File]::ReadAllText($statusPath)}
+            if(Test-Path -LiteralPath $statusPath){$status=Read-NativeStatus $statusPath}
             if($status.Contains($Expected)){break}
             if($status -match '(missing|empty|failed|invalid|rejected)'){throw 'Expression selection rejected; inspect local status.'}
             if($clock.Elapsed.TotalSeconds -gt 10){throw 'Expression acknowledgement timeout.'}
@@ -139,7 +155,7 @@ try {
             $preview.Refresh()
             if($preview.HasExited){throw 'Renderer closed during playback; no retry.'}
             $path=Join-Path $speechDir ($id+'.status')
-            if(Test-Path -LiteralPath $path){$events=[IO.File]::ReadAllText($path)}
+            if(Test-Path -LiteralPath $path){$events=Read-NativeStatus $path}
             if($events -match '(failed|missing|unsupported|timeout|regressed|interrupted|wave_size|wave_header|wave_chunk|riff_size|wave_format|duplicate_data|wave_padding)'){throw 'Native voice playback failed; inspect local status.'}
             if($timer.Elapsed.TotalSeconds -gt ($info.Seconds+30)){throw 'Voice playback timeout.'}
         } until($events.Contains('playback_completed'))
