@@ -21,7 +21,7 @@ jobs:
             $target = Join-Path $base ('audition-tools-' + $env:GITHUB_RUN_ID)
             $null = New-Item -ItemType Directory -Path $target
             foreach ($name in @('Start-MotionVoiceAudition.ps1', 'Test-CeVIO.ps1')) {
-              $uri = 'https://raw.githubusercontent.com/cureflash/live2d-agent/b682b344fca0bf605f2630afa52f231999404c75/probes/' + $name
+              $uri = 'https://raw.githubusercontent.com/cureflash/live2d-agent/d6389443023a7f74c7463a15028d7d40bbab31d9/probes/' + $name
               $path = Join-Path $target $name
               Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $path
               $tokens = $null
