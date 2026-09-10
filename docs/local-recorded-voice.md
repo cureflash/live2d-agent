@@ -50,3 +50,11 @@ These measurements do not verify all 43 audible clips or the semantic/visual sui
 - Semantic pairing of each recording with a gesture/expression.
 - Tap behavior and production notification policy remain the original unresolved requirements.
 - No conclusion about game asset redistribution or character licensing follows from private playback. No private assets or SDK binaries are included in this repository.
+
+## Human observation and motion diagnosis
+
+The user reported audible voice and visible mouth movement, but no visible body gesture in the automated test. Therefore motion visual acceptance FAILED / remains unresolved; the prior native audio success is not overall visual success.
+
+Read-only diagnosis run 34480722685 verified that the copied Idle slot used motion index 0. Its 85 curves include only 7 varying curves, with maximum authored control-point range 4. Index 2 has 15 varying curves and substantially larger head/body ranges (up to 50). These are file-level ranges, not measured rendered movement. They support auditioning index 2 as the next minimal discrimination test; they do not prove that index 0's small variation explains the missing gesture or that the runtime correctly evaluates motion.
+
+Next: launch the installed local voice launcher, choose motion 2, then a voice. Human observation of body/head movement is still required before marking movement complete.
