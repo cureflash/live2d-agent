@@ -1,0 +1,68 @@
+name: Build native speech synchronization probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-sync-build.yml']
+permissions:
+  contents: read
+concurrency:
+  group: live2d-agent-sync-build
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'cureflash/live2d-agent' && github.actor == 'cureflash' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 15
+    steps:
+      - name: Build isolated application with playback-position mouth owner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+            $built = Get-Content -LiteralPath (Join-Path $base 'sample-build.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            $private = Get-Content -LiteralPath (Join-Path $base 'private-model.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            $work = Join-Path $base ('sync-build-' + $env:GITHUB_RUN_ID)
+            $relative = 'Samples\D3D11\Demo\proj.d3d11.cmake'
+            $source = Join-Path $work $relative
+            $null = New-Item -ItemType Directory -Path $source
+            Copy-Item -LiteralPath (Join-Path $built.SDKRoot ($relative + '\src')) -Destination $source -Recurse
+            $cmakeText = Get-Content -LiteralPath (Join-Path $built.SDKRoot ($relative + '\CMakeLists.txt')) -Raw -Encoding UTF8
+            $needle = 'set(SDK_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../../..)'
+            if (-not $cmakeText.Contains($needle)) { throw 'SDK CMake source differs.' }
+            $cmakeText = $cmakeText.Replace($needle, ('set(SDK_ROOT_PATH "' + $built.SDKRoot.Replace('\','/') + '")'))
+            [IO.File]::WriteAllText((Join-Path $source 'CMakeLists.txt'), $cmakeText, (New-Object Text.UTF8Encoding($false)))
+            $pin = 'e56cd0db3f36f533b68b7a92ab53422ef13d60bc'
+            Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $pin + '/native/AgentAudio.hpp') -OutFile (Join-Path $source 'src\AgentAudio.hpp')
+            Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/cureflash/live2d-agent/' + $pin + '/native/sdk-integration.patch') -OutFile (Join-Path $work 'integration.patch')
+            & git -C $work apply --check --ignore-space-change (Join-Path $work 'integration.patch') 2>&1 | Out-File (Join-Path $work 'patch-check.log')
+            if ($LASTEXITCODE -ne 0) { throw 'SDK application source patch does not match.' }
+            & git -C $work apply --ignore-space-change (Join-Path $work 'integration.patch')
+            if ($LASTEXITCODE -ne 0) { throw 'SDK application source patch failed.' }
+            $vswhere = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+            $installations = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath)
+            if ($LASTEXITCODE -ne 0 -or $installations.Count -ne 1) { throw 'Expected one v143 installation.' }
+            $cmake = Join-Path $installations[0] 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+            $buildDir = Join-Path $work 'build'
+            & $cmake -S $source -B $buildDir -G 'Visual Studio 18 2026' -A x64 -T 'v143,version=14.44.35207' *> (Join-Path $work 'configure.log')
+            if ($LASTEXITCODE -ne 0) { throw 'Configure failed; log kept locally.' }
+            & $cmake --build $buildDir --config Release --parallel 2 *> (Join-Path $work 'build.log')
+            if ($LASTEXITCODE -ne 0) {
+              Get-Content -LiteralPath (Join-Path $work 'build.log') | Where-Object { $_ -match 'error [A-Z]+[0-9]+' } |
+                ForEach-Object { ([string]$_).Replace($env:USERPROFILE, '<user>') }
+              throw 'Build failed.'
+            }
+            $runtime = Join-Path $base ('sync-runtime-' + $env:GITHUB_RUN_ID)
+            Copy-Item -LiteralPath $private.WorkingDirectory -Destination $runtime -Recurse
+            Copy-Item -LiteralPath (Join-Path $buildDir 'bin\Demo\Release\Demo.exe') -Destination (Join-Path $runtime 'Demo.exe') -Force
+            $null = New-Item -ItemType Directory -Path (Join-Path $runtime 'speech')
+            [ordered]@{ Executable = (Join-Path $runtime 'Demo.exe'); WorkingDirectory = $runtime; BuildRoot = $work } |
+              ConvertTo-Json | Set-Content -LiteralPath (Join-Path $base 'sync-build.json') -Encoding UTF8
+            @('@echo off', ('cd /d "' + $runtime + '"'), '"Demo.exe"') |
+              Set-Content -LiteralPath (Join-Path $base 'Launch-SyncModel.cmd') -Encoding Default
+            Write-Output 'SYNC_BUILD_SUCCEEDED; CeVIO not accessed; visual synchronization unverified.'
+          } catch {
+            Write-Output ('SYNC_BUILD_FAILED ' + $_.Exception.Message.Replace($env:USERPROFILE, '<user>'))
+            exit 1
+          }
