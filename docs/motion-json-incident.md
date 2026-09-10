@@ -36,3 +36,18 @@ Private workflow `windows-json-import-fix.yml` checks a numeric/string regressio
 Mouth appearance has no established cause yet. Recheck after successful motion import, because the previous run never applied the motion's initial parameter state. Do not edit textures, hide mouth drawables, guess expression meanings or force extra mouth parameters without evidence.
 
 No CeVIO calls occur in any of these tests. Native diagnostics close only their own test instance.
+
+## Windows verification and installation
+
+Run 34483233080 / job 102890958995 succeeded:
+- Numeric/string regression preserved fixture values and the literal ID.
+- Nine Motion entries plus the copied Idle entry passed SDK JSON validity and motion consistency.
+- Six motion starts succeeded; zero failed.
+- 723 frames were observed. Motion-stage ranges included head Y 48.6317, head Z 41.077, body Y 17.6917, and arms 19.
+- The test window closed normally with exit code 0.
+- Launch-MadokaVoice.cmd now points to the corrected import launcher.
+- CeVIO was not accessed.
+
+The preceding run 34482850316 failed its combined normal-close check, which did not distinguish closure failure from exit status. Its cause remains undetermined; it did not install the launcher. The successful follow-up separately recorded the close request and exit code and retained the original parsing/motion gates.
+
+User visual acceptance of the corrected body motion and mouth appearance is still pending. Expression selection remains unimplemented.
