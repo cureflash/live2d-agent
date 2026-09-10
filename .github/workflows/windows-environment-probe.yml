@@ -160,7 +160,7 @@ jobs:
               } | ConvertTo-Json -Depth 4
               foreach ($entry in $zip.Entries) {
                 $name = $entry.FullName.Replace('\','/')
-                if ($name -like '*/Samples/D3D11/Demo/CMakeLists.txt' -or ($name -like '*/README.md' -and $name.Split('/').Count -eq 2)) {
+                if ($name -like '*/Samples/D3D11/Demo/proj.d3d11.cmake/CMakeLists.txt' -or $name -like '*/Samples/D3D11/README.md' -or $name -like '*/Samples/D3D11/Demo/proj.d3d11.cmake/src/CMakeLists.txt') {
                   if ($entry.Length -gt 24000) { Write-Output 'SDK document omitted due to size.'; continue }
                   $reader = New-Object IO.StreamReader($entry.Open())
                   try { $document = $reader.ReadToEnd() } finally { $reader.Dispose() }
@@ -174,4 +174,22 @@ jobs:
             } finally {
               if ($null -ne $zip) { $zip.Dispose() }
             }
+          }
+
+      - name: Inspect available compiler versions and CMake generators
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $installations = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+          if ($LASTEXITCODE -ne 0) { throw 'Compiler inventory failed.' }
+          foreach ($installation in $installations) {
+            $toolsRoot = Join-Path $installation 'VC\Tools\MSVC'
+            $versions = @(Get-ChildItem -LiteralPath $toolsRoot -Directory | Select-Object -ExpandProperty Name)
+            [pscustomobject]@{ InstalledMSVCVersions = $versions } | ConvertTo-Json
+            $cmake = Join-Path $installation 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+            & $cmake --version
+            if ($LASTEXITCODE -ne 0) { throw 'CMake version query failed.' }
+            & $cmake --help | Select-String -Pattern 'Visual Studio|Ninja'
+            if ($LASTEXITCODE -ne 0) { throw 'CMake generator query failed.' }
           }
