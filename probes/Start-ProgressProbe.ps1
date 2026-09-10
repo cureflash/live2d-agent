@@ -11,7 +11,8 @@ $session = Join-Path $base ('progress-session-' + $sessionId)
 $null = New-Item -ItemType Directory -Path $session
 $sessionPointer = Join-Path $base 'progress-session.json'
 # A test session is explicit and one-shot; this is not a production pause policy.
-$lockPath = Join-Path $base 'sync-probe.lock'
+$lockName = if ($AutomatedSmoke) { 'progress-smoke.lock' } else { 'sync-probe.lock' }
+$lockPath = Join-Path $base $lockName
 $lock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 $worker=$null
 try {
