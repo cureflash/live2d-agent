@@ -28,6 +28,13 @@ function Replace-LineOnce([string]$Text, [string]$Prefix, [string]$New, [string]
     return $Text.Substring(0, $match.Index) + $New + $Text.Substring($match.Index + $match.Length)
 }
 
+function Replace-RegexOnce([string]$Text, [string]$Pattern, [string]$New, [string]$Label) {
+    $matches=[regex]::Matches($Text,$Pattern,[Text.RegularExpressions.RegexOptions]::Singleline)
+    if($matches.Count -ne 1){throw "Expected exactly one regex source block: $Label count=$($matches.Count)"}
+    $m=$matches[0]
+    return $Text.Substring(0,$m.Index)+$New+$Text.Substring($m.Index+$m.Length)
+}
+
 function Write-SourceUtf8Bom([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($true)))
 }
@@ -135,14 +142,6 @@ $cpp = Replace-ExactlyOnce $cpp @'
         if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);
 '@ 'LAppModel.cpp idle suppression'
 $cpp = Replace-ExactlyOnce $cpp @'
-    _agentExpression.after(_model);
-    _agentAudio.update(_model, _lipSyncIds);
-'@ @'
-    _agentExpression.after(_model);
-    _agentHome->ApplyOverrides(_model);
-    _agentAudio.update(_model, _lipSyncIds);
-'@ 'LAppModel.cpp home parameter overrides'
-$cpp = Replace-ExactlyOnce $cpp @'
 CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt32 no, csmInt32 priority,
 '@ @'
 void LAppModel::StartHomeTap()
@@ -155,16 +154,21 @@ CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt
 Write-SourceUtf8Bom $cppPath $cpp
 
 $manager = Read-Normalized $managerPath
-$manager = Replace-ExactlyOnce $manager @'
-            _models[i]->SetRandomExpression();
-'@ @'
-            _models[i]->StartHomeTap();
-'@ 'LAppLive2DManager.cpp head tap'
-$manager = Replace-ExactlyOnce $manager @'
-            _models[i]->StartRandomMotion(MotionGroupTapBody, PriorityNormal, FinishedMotion, BeganMotion);
-'@ @'
-            _models[i]->StartHomeTap();
-'@ 'LAppLive2DManager.cpp body tap'
+$managerPattern='void LAppLive2DManager::OnTap\(csmFloat32 x, csmFloat32 y\) const\s*\{.*?\n\}\n\nvoid LAppLive2DManager::OnUpdate\(\) const'
+$managerReplacement=@'
+void LAppLive2DManager::OnTap(csmFloat32 x, csmFloat32 y) const
+{
+    (void)x;
+    (void)y;
+    for (csmUint32 i = 0; i < _models.GetSize(); ++i)
+    {
+        _models[i]->StartHomeTap();
+    }
+}
+
+void LAppLive2DManager::OnUpdate() const
+'@
+$manager = Replace-RegexOnce $manager $managerPattern $managerReplacement 'LAppLive2DManager.cpp home tap routing'
 Write-SourceUtf8Bom $managerPath $manager
 
 $hppCheck = Read-Normalized $hppPath
@@ -177,9 +181,8 @@ if (-not $hppCheck.Contains('void StartHomeTap();')) { throw 'StartHomeTap decla
 if (-not $cppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation include missing in cpp.' }
 if (-not $cppCheck.Contains('_agentAudio.QueueLocalWave(voicePath)')) { throw 'Home audio dispatch missing after edit.' }
 if (-not $cppCheck.Contains('if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);')) { throw 'Home idle suppression missing after edit.' }
-if (-not $cppCheck.Contains('_agentHome->ApplyOverrides(_model);')) { throw 'Home parameter override missing after edit.' }
-if (($managerCheck.Split([string[]]@('_models[i]->StartHomeTap();'), [StringSplitOptions]::None).Count - 1) -ne 2) { throw 'Expected exactly two tap routes to StartHomeTap.' }
-if ($managerCheck.Contains('_models[i]->SetRandomExpression();')) { throw 'Old head tap behavior remains.' }
-if ($managerCheck.Contains('_models[i]->StartRandomMotion(MotionGroupTapBody, PriorityNormal, FinishedMotion, BeganMotion);')) { throw 'Old body tap behavior remains.' }
+if ($cppCheck.Contains('_agentHome->ApplyOverrides(_model);')) { throw 'Unverified cheek/tear override remains enabled.' }
+if (($managerCheck.Split([string[]]@('_models[i]->StartHomeTap();'), [StringSplitOptions]::None).Count - 1) -ne 1) { throw 'Expected direct home tap route.' }
+if ($managerCheck.Contains('HitTest(HitAreaNameHead') -or $managerCheck.Contains('HitTest(HitAreaNameBody')) { throw 'Legacy hit-area gate remains in OnTap.' }
 
 Write-Output 'MAGIRECO_HOME_SOURCE_INTEGRATION_APPLIED'
