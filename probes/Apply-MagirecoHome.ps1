@@ -187,7 +187,8 @@ CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt
 '@ @'
 void LAppModel::StartHomeTap()
 {
-    if (!_agentAudio.IsBusy()) _agentHome->RequestTap();
+    _agentAudio.Interrupt();
+    _agentHome->RequestTap();
 }
 
 CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt32 no, csmInt32 priority,
@@ -230,6 +231,8 @@ if ($hppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implement
 if (-not $hppCheck.Contains('void StartHomeTap();')) { throw 'StartHomeTap declaration missing after edit.' }
 if (-not $cppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation include missing in cpp.' }
 if (-not $cppCheck.Contains('_agentAudio.QueueLocalWave(voicePath)')) { throw 'Home audio dispatch missing after edit.' }
+if (-not $cppCheck.Contains('_agentAudio.Interrupt();')) { throw 'Home tap audio interruption missing.' }
+if (-not $cppCheck.Contains('_agentHome->RequestTap();')) { throw 'Home tap sequence restart missing.' }
 if (-not $cppCheck.Contains('LIVE2D_AGENT_DIAG_DISABLE_MOTION')) { throw 'Motion diagnostic gate missing.' }
 if (-not $cppCheck.Contains('LIVE2D_AGENT_DIAG_DISABLE_EXPRESSION')) { throw 'Expression diagnostic gate missing.' }
 if (-not $cppCheck.Contains('LIVE2D_AGENT_TRACE_MOUTH')) { throw 'Mouth trace missing.' }
@@ -243,3 +246,4 @@ if (($textureManagerCheck.Split([string[]]@('            NULL,'), [StringSplitOp
 
 Write-Output 'MAGIRECO_HOME_SOURCE_INTEGRATION_APPLIED'
 Write-Output 'MAGIRECO_TEXTURE_MIPMAPS_DISABLED'
+Write-Output 'MAGIRECO_HOME_TAP_INTERRUPT_ENABLED'
