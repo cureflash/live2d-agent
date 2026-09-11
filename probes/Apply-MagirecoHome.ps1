@@ -36,6 +36,7 @@ $source = [IO.Path]::GetFullPath($SourceRoot)
 $hppPath = Join-Path $source 'LAppModel.hpp'
 $cppPath = Join-Path $source 'LAppModel.cpp'
 $managerPath = Join-Path $source 'LAppLive2DManager.cpp'
+$textureManagerPath = Join-Path $source 'LAppTextureManager.cpp'
 
 $hpp = Read-Normalized $hppPath
 $hpp = Replace-ExactlyOnce $hpp @'
@@ -211,9 +212,18 @@ $manager = Replace-ExactlyOnce $manager @'
 '@ 'LAppLive2DManager.cpp body tap'
 Write-SourceUtf8Bom $managerPath $manager
 
+$textureManager = Read-Normalized $textureManagerPath
+$textureManager = Replace-ExactlyOnce $textureManager @'
+            context,
+'@ @'
+            NULL,
+'@ 'LAppTextureManager.cpp disable automatic mipmaps for straight-alpha textures'
+Write-SourceUtf8Bom $textureManagerPath $textureManager
+
 $hppCheck = Read-Normalized $hppPath
 $cppCheck = Read-Normalized $cppPath
 $managerCheck = Read-Normalized $managerPath
+$textureManagerCheck = Read-Normalized $textureManagerPath
 if (-not $hppCheck.Contains('class AgentHome;')) { throw 'AgentHome forward declaration missing after edit.' }
 if (-not $hppCheck.Contains('AgentHome* _agentHome;')) { throw 'AgentHome pointer missing after edit.' }
 if ($hppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation leaked into public model header.' }
@@ -228,5 +238,8 @@ if (-not $cppCheck.Contains('if (!_agentHome->IsActive()) StartRandomMotion(Moti
 if ($cppCheck.Contains('_agentHome->ApplyOverrides(_model);')) { throw 'Unverified cheek/tear override remains enabled.' }
 if (-not $managerCheck.Contains('        if (true)')) { throw 'Broken hit-area gate was not bypassed.' }
 if (($managerCheck.Split([string[]]@('_models[i]->StartHomeTap();'), [StringSplitOptions]::None).Count - 1) -ne 2) { throw 'Expected both legacy tap actions to route home tap.' }
+if (($textureManagerCheck.Split([string[]]@('            context,'), [StringSplitOptions]::None).Count - 1) -ne 0) { throw 'Automatic mipmap context remains in texture loader.' }
+if (($textureManagerCheck.Split([string[]]@('            NULL,'), [StringSplitOptions]::None).Count - 1) -lt 2) { throw 'Expected both texture-loader branches to use no-mipmap context.' }
 
 Write-Output 'MAGIRECO_HOME_SOURCE_INTEGRATION_APPLIED'
+Write-Output 'MAGIRECO_TEXTURE_MIPMAPS_DISABLED'
