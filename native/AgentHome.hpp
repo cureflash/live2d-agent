@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <cstddef>
 #include <CubismFramework.hpp>
+#include <Id/CubismIdManager.hpp>
 #include <Model/CubismModel.hpp>
 
 struct AgentHomeScene
