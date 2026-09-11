@@ -20,6 +20,14 @@ function Replace-ExactlyOnce([string]$Text, [string]$Old, [string]$New, [string]
     return $Text.Substring(0, $first) + $New + $Text.Substring($first + $Old.Length)
 }
 
+function Replace-LineOnce([string]$Text, [string]$Prefix, [string]$New, [string]$Label) {
+    $pattern = '(?m)^' + [regex]::Escape($Prefix) + '[^\n]*\n'
+    $matches = [regex]::Matches($Text, $pattern)
+    if ($matches.Count -ne 1) { throw "Expected exactly one source line: $Label count=$($matches.Count)" }
+    $match = $matches[0]
+    return $Text.Substring(0, $match.Index) + $New + $Text.Substring($match.Index + $match.Length)
+}
+
 function Write-Utf8NoBom([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($false)))
 }
@@ -56,11 +64,8 @@ $hpp = Replace-ExactlyOnce $hpp @'
 Write-Utf8NoBom $hppPath $hpp
 
 $cpp = Read-Normalized $cppPath
-$cpp = Replace-ExactlyOnce $cpp @'
-    _model->LoadParameters(); // 前回セーブされた状態をロード
-    if (_motionManager->IsFinished())
-'@ @'
-    _model->LoadParameters(); // 前回セーブされた状態をロード
+$cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
+    _model->LoadParameters();
 
     AgentHomeAction homeAction;
     if (_agentHome.Poll(homeAction))
@@ -95,7 +100,6 @@ $cpp = Replace-ExactlyOnce $cpp @'
         if (homeAction.Expression != nullptr) SetExpression(homeAction.Expression);
     }
 
-    if (_motionManager->IsFinished())
 '@ 'LAppModel.cpp home dispatcher'
 $cpp = Replace-ExactlyOnce $cpp @'
         StartRandomMotion(MotionGroupIdle, PriorityIdle);
