@@ -101,13 +101,14 @@ if(-not(Test-Path -LiteralPath (Join-Path $modelDir ([string]$config.FileReferen
 
 $audioDir=Join-Path $runtime 'home-audio'
 $null=New-Item -ItemType Directory -Path $audioDir
-foreach($number in (@(24)+@(33..41))){
-    $name=('vo_char_2001_00_{0:D2}' -f $number)
-    $matches=@($bank.Clips|Where-Object {[string]$_.Name -eq $name})
-    if($matches.Count -ne 1){throw ('Expected one local clip: '+$name)}
+foreach($number in (@(24)+@(33..42))){
+    $runtimeName=('vo_char_2001_00_{0:D2}' -f $number)
+    $bankName=$runtimeName+'_hca'
+    $matches=@($bank.Clips|Where-Object {[string]$_.Name -eq $bankName})
+    if($matches.Count -ne 1){throw ('Expected one decoded local clip: '+$bankName)}
     $wave=[string]$matches[0].WavePath
     $null=Get-LocalPcmWaveInfo $wave
-    Copy-Item -LiteralPath $wave -Destination (Join-Path $audioDir ($name+'.wav')) -Force
+    Copy-Item -LiteralPath $wave -Destination (Join-Path $audioDir ($runtimeName+'.wav')) -Force
 }
 $speechDir=Join-Path $runtime 'speech'
 $null=New-Item -ItemType Directory -Path $speechDir -Force
@@ -165,4 +166,4 @@ if(-not $p.CloseMainWindow() -or -not $p.WaitForExit(10000) -or $p.ExitCode -ne 
 )|Set-Content -LiteralPath (Join-Path $base 'Launch-MagirecoHome.cmd') -Encoding Default
 
 Write-Output ('MAGIRECO_HOME_READY runtime='+$runtime)
-Write-Output 'startup_voice=24 tap_voices=33-41 pose=true expressions=true cevio=false'
+Write-Output 'startup_voice=24 tap_voices=33-42 pose=true expressions=true cevio=false'
