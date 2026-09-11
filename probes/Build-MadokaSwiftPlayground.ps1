@@ -332,7 +332,7 @@ $tapReplacement = @'
 $manager = $manager.Substring(0, $tapStart) + $tapReplacement + $manager.Substring($nextComment)
 $manager = Replace-ExactlyOnce $manager '    this._sceneIndex = 0;' "    this._sceneIndex = 0;`n    this._madokaHome = new MadokaHome();" 'MadokaHome construction'
 $manager = Replace-ExactlyOnce $manager '    this._subdelegate = subdelegate;' "    this._subdelegate = subdelegate;`n    this._madokaHome.start(() => this._models[0]);" 'MadokaHome startup'
-$manager = Replace-ExactlyOnce $manager '  private _sceneIndex: number; // 表示するシーンのインデックス値' "  private _sceneIndex: number; // 表示するシーンのインデックス値`n  private _madokaHome: MadokaHome;" 'MadokaHome field'
+$manager = Replace-RegexOnce $manager '(?m)^  private _sceneIndex: number;.*$' "  private _sceneIndex: number;`n  private _madokaHome: MadokaHome;" 'MadokaHome field'
 Write-Utf8 $managerPath $manager
 
 Push-Location $demo
