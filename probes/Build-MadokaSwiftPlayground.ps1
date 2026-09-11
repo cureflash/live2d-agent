@@ -311,7 +311,14 @@ Write-Utf8 (Join-Path $demoSrc 'madokahome.ts') $homeTs
 $managerPath = Join-Path $demoSrc 'lapplive2dmanager.ts'
 $manager = Normalize-Lf (Get-Content -LiteralPath $managerPath -Raw -Encoding UTF8)
 $manager = Replace-ExactlyOnce $manager "import { LAppSubdelegate } from './lappsubdelegate';" "import { LAppSubdelegate } from './lappsubdelegate';`nimport { MadokaHome } from './madokahome';" 'MadokaHome import'
-$tapPattern = '(?s)  public onTap\(x: number, y: number\): void \{.*?\n  \}\n\n  /\*\*\n   \* 画面を更新'
+
+$tapStartMarker = '  public onTap(x: number, y: number): void {'
+$tapStart = $manager.IndexOf($tapStartMarker, [StringComparison]::Ordinal)
+if ($tapStart -lt 0) { throw 'Madoka tap method start marker missing.' }
+if ($manager.IndexOf($tapStartMarker, $tapStart + $tapStartMarker.Length, [StringComparison]::Ordinal) -ge 0) { throw 'Madoka tap method start marker is not unique.' }
+$nextComment = $manager.IndexOf('  /**', $tapStart + $tapStartMarker.Length, [StringComparison]::Ordinal)
+$updateStart = $manager.IndexOf('  public onUpdate(): void {', $tapStart + $tapStartMarker.Length, [StringComparison]::Ordinal)
+if ($nextComment -lt 0 -or $updateStart -lt 0 -or $nextComment -gt $updateStart) { throw 'Madoka tap method end markers are invalid.' }
 $tapReplacement = @'
   public onTap(x: number, y: number): void {
     if (LAppDefine.DebugLogEnable) {
@@ -321,12 +328,10 @@ $tapReplacement = @'
     if (model) this._madokaHome.requestTap(model);
   }
 
-  /**
-   * 画面を更新
 '@
-$manager = Replace-RegexOnce $manager $tapPattern $tapReplacement 'Madoka tap routing'
-$manager = Replace-ExactlyOnce $manager "    this._sceneIndex = 0;`n  }" "    this._sceneIndex = 0;`n    this._madokaHome = new MadokaHome();`n  }" 'MadokaHome construction'
-$manager = Replace-ExactlyOnce $manager "    this._subdelegate = subdelegate;`n    this.changeScene(this._sceneIndex);`n  }" "    this._subdelegate = subdelegate;`n    this.changeScene(this._sceneIndex);`n    this._madokaHome.start(() => this._models[0]);`n  }" 'MadokaHome startup'
+$manager = $manager.Substring(0, $tapStart) + $tapReplacement + $manager.Substring($nextComment)
+$manager = Replace-ExactlyOnce $manager '    this._sceneIndex = 0;' "    this._sceneIndex = 0;`n    this._madokaHome = new MadokaHome();" 'MadokaHome construction'
+$manager = Replace-ExactlyOnce $manager '    this._subdelegate = subdelegate;' "    this._subdelegate = subdelegate;`n    this._madokaHome.start(() => this._models[0]);" 'MadokaHome startup'
 $manager = Replace-ExactlyOnce $manager '  private _sceneIndex: number; // 表示するシーンのインデックス値' "  private _sceneIndex: number; // 表示するシーンのインデックス値`n  private _madokaHome: MadokaHome;" 'MadokaHome field'
 Write-Utf8 $managerPath $manager
 
