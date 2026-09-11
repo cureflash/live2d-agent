@@ -111,6 +111,12 @@ public:
         return device != nullptr || managed || GetFileAttributesA("speech.ready") != INVALID_FILE_ATTRIBUTES;
     }
 
+    void Interrupt() {
+        if (device || managed) status("interrupted_by_tap");
+        close();
+        DeleteFileA("speech.ready");
+    }
+
     bool QueueLocalWave(const std::string& sourcePath) {
         if (IsBusy() || GetFileAttributesA(sourcePath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
         CreateDirectoryA("speech", nullptr);
