@@ -20,6 +20,10 @@ function Replace-RegexOnce([string]$Text, [string]$Pattern, [string]$Replacement
     return [regex]::Replace($Text, $Pattern, $Replacement, 1)
 }
 
+function Normalize-Lf([string]$Text) {
+    return $Text.Replace("`r`n", "`n").Replace("`r", "`n")
+}
+
 function Write-Utf8([string]$Path, [string]$Text) {
     $parent = Split-Path -Parent $Path
     if ($parent) { $null = New-Item -ItemType Directory -Path $parent -Force }
@@ -98,24 +102,24 @@ $homeConfig = [ordered]@{
 Write-Utf8 (Join-Path $madokaDir 'home-config.json') ($homeConfig | ConvertTo-Json -Depth 20)
 
 $lappDefinePath = Join-Path $demoSrc 'lappdefine.ts'
-$lappDefine = Get-Content -LiteralPath $lappDefinePath -Raw -Encoding UTF8
+$lappDefine = Normalize-Lf (Get-Content -LiteralPath $lappDefinePath -Raw -Encoding UTF8)
 $lappDefine = Replace-ExactlyOnce $lappDefine "export const ResourcesPath = '../../Resources/';" "export const ResourcesPath = './Resources/';" 'ResourcesPath'
 $lappDefine = Replace-RegexOnce $lappDefine '(?s)export const ModelDir: string\[\] = \[.*?\];' "export const ModelDir: string[] = [`n  'Madoka'`n];" 'ModelDir'
 Write-Utf8 $lappDefinePath $lappDefine
 
 $vitePath = Join-Path $demo 'vite.config.mts'
-$vite = Get-Content -LiteralPath $vitePath -Raw -Encoding UTF8
+$vite = Normalize-Lf (Get-Content -LiteralPath $vitePath -Raw -Encoding UTF8)
 $vite = Replace-ExactlyOnce $vite "    base: '/'," "    base: './'," 'Vite relative base'
 Write-Utf8 $vitePath $vite
 
 $indexPath = Join-Path $demo 'index.html'
-$index = Get-Content -LiteralPath $indexPath -Raw -Encoding UTF8
+$index = Normalize-Lf (Get-Content -LiteralPath $indexPath -Raw -Encoding UTF8)
 $index = Replace-ExactlyOnce $index './Core/live2dcubismcore.js' './Core/live2dcubismcore.min.js' 'Cubism Core script'
 $index = Replace-ExactlyOnce $index '<title>TypeScript HTML App</title>' '<title>Madoka Live2D</title>' 'HTML title'
 Write-Utf8 $indexPath $index
 
 $lappModelPath = Join-Path $demoSrc 'lappmodel.ts'
-$lappModel = Get-Content -LiteralPath $lappModelPath -Raw -Encoding UTF8
+$lappModel = Normalize-Lf (Get-Content -LiteralPath $lappModelPath -Raw -Encoding UTF8)
 $lappModel = Replace-ExactlyOnce $lappModel 'export class LAppModel extends CubismUserModel {' @'
 export class LAppModel extends CubismUserModel {
   private _homeActive = false;
@@ -305,7 +309,7 @@ export class MadokaHome {
 Write-Utf8 (Join-Path $demoSrc 'madokahome.ts') $homeTs
 
 $managerPath = Join-Path $demoSrc 'lapplive2dmanager.ts'
-$manager = Get-Content -LiteralPath $managerPath -Raw -Encoding UTF8
+$manager = Normalize-Lf (Get-Content -LiteralPath $managerPath -Raw -Encoding UTF8)
 $manager = Replace-ExactlyOnce $manager "import { LAppSubdelegate } from './lappsubdelegate';" "import { LAppSubdelegate } from './lappsubdelegate';`nimport { MadokaHome } from './madokahome';" 'MadokaHome import'
 $tapPattern = '(?s)  public onTap\(x: number, y: number\): void \{.*?\n  \}\n\n  /\*\*\n   \* 画面を更新'
 $tapReplacement = @'
