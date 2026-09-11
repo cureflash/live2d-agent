@@ -180,7 +180,15 @@ public:
 
     bool RequestTap()
     {
-        if (_startupPending || _active || _tapPending) return false;
+        _startupPending = false;
+        _active = false;
+        _emitPending = false;
+        _voicePending = false;
+        _sceneIndex = 0;
+        _sequenceIndex = -1;
+        _cheekSet = false;
+        _tearSet = false;
+        _resetTearPending = true;
         _tapPending = true;
         return true;
     }
