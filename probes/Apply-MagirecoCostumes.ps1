@@ -29,8 +29,6 @@ $viewPath=Join-Path $source 'LAppView.cpp'
 $view=Read-Normalized $viewPath
 $view=Replace-ExactlyOnce $view @'
         live2DManager->OnTap(x, y);
-
-        // 歯車にタップしたか
 '@ @'
         if (_gear->IsHit(px, py, width, height))
         {
@@ -38,8 +36,6 @@ $view=Replace-ExactlyOnce $view @'
             return;
         }
         live2DManager->OnTap(x, y);
-
-        // 歯車にタップしたか
 '@ 'LAppView.cpp costume switch before home tap'
 Write-Utf8Bom $viewPath $view
 
