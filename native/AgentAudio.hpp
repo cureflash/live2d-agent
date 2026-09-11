@@ -9,6 +9,8 @@
 #include <cstring>
 #include <cstdio>
 #include <stdexcept>
+#include <CubismFramework.hpp>
+#include <Id/CubismIdManager.hpp>
 #include <Model/CubismModel.hpp>
 #pragma comment(lib, "winmm.lib")
 
@@ -27,6 +29,12 @@ class AgentAudio {
     unsigned positionUpdates = 0;
     float peakMouth = 0;
     static unsigned u32(const char* p) { unsigned v; std::memcpy(&v,p,4); return v; }
+    static int mouthIndex(Live2D::Cubism::Framework::CubismModel* model) {
+        using namespace Live2D::Cubism::Framework;
+        const CubismIdHandle target = CubismFramework::GetIdManager()->GetId("ParamMouthOpenY");
+        for (int p=0;p<model->GetParameterCount();++p) if(model->GetParameterId(p)==target) return p;
+        return -1;
+    }
     void status(const char* value) {
         if (id.empty()) return;
         std::ofstream out("speech/" + id + ".status", std::ios::app);
@@ -133,6 +141,7 @@ public:
 
     void update(Live2D::Cubism::Framework::CubismModel* model,
         const Live2D::Cubism::Framework::csmVector<Live2D::Cubism::Framework::CubismIdHandle>& ids) {
+        (void)ids;
         if (!device && GetTickCount64()>=nextPoll) {
             nextPoll=GetTickCount64()+100;
             HANDLE dispatchGate=CreateFileA("speech.lock",GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -152,12 +161,7 @@ public:
                         previousPosition=positionUpdates=0; peakMouth=0;
                         status("accepted");
                         try {
-                            if (ids.GetSize()==0) throw std::runtime_error("lip_group_missing");
-                            for (int i=0;i<ids.GetSize();++i) {
-                                bool found=false;
-                                for (int p=0;p<model->GetParameterCount();++p) if(model->GetParameterId(p)==ids[i]) found=true;
-                                if(!found) throw std::runtime_error("lip_parameter_missing");
-                            }
+                            if (mouthIndex(model)<0) throw std::runtime_error("mouth_open_parameter_missing");
                             load();
                         } catch (const std::exception& error) { status(error.what()); close(); }
                     } else if (GetLastError()==ERROR_FILE_EXISTS) { status("duplicate_suppressed"); id.clear(); }
@@ -187,16 +191,15 @@ public:
                     const size_t finish=(std::min)(pcm.size(),begin+static_cast<size_t>(format.nSamplesPerSec/100)*format.nBlockAlign);
                     double sum=0; size_t count=0;
                     for(size_t p=begin;p+2<=finish;p+=2) { short sample; std::memcpy(&sample,pcm.data()+p,2); const double v=sample/32768.0; sum+=v*v; ++count; }
-                    if(count) mouth=static_cast<float>((std::min)(1.0,std::sqrt(sum/count)*4.0));
+                    if(count) mouth=static_cast<float>((std::min)(1.0,std::sqrt(sum/count)*2.5));
                     peakMouth=(std::max)(peakMouth,mouth);
                 }
             } catch(const std::exception& error) { status(error.what()); close(); }
         }
-        // Own configured mouth parameters only while playback remains active.
-        if(managed) for(int i=0;i<ids.GetSize();++i) {
-            for(int p=0;p<model->GetParameterCount();++p) if(model->GetParameterId(p)==ids[i]) {
-                model->SetParameterValue(p,mouth); break;
-            }
+        // Own only ParamMouthOpenY while playback remains active. Mouth-form/cheek/etc. stay authored by the model.
+        if(managed) {
+            const int p=mouthIndex(model);
+            if(p>=0) model->SetParameterValue(p,mouth);
         }
     }
 };
