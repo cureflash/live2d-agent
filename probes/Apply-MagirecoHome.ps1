@@ -40,11 +40,16 @@ $managerPath = Join-Path $source 'LAppLive2DManager.cpp'
 $hpp = Read-Normalized $hppPath
 $hpp = Replace-ExactlyOnce $hpp @'
 #include "AgentExpression.hpp"
+
+
+/**
 '@ @'
 #include "AgentExpression.hpp"
-#include <Id/CubismIdManager.hpp>
-#include "AgentHome.hpp"
-'@ 'LAppModel.hpp includes'
+
+class AgentHome;
+
+/**
+'@ 'LAppModel.hpp AgentHome forward declaration'
 $hpp = Replace-ExactlyOnce $hpp @'
     AgentAudio _agentAudio;
     AgentExpression _agentExpression;
@@ -52,7 +57,7 @@ public:
 '@ @'
     AgentAudio _agentAudio;
     AgentExpression _agentExpression;
-    AgentHome _agentHome;
+    AgentHome* _agentHome;
 public:
 '@ 'LAppModel.hpp members'
 $hpp = Replace-ExactlyOnce $hpp @'
@@ -64,11 +69,34 @@ $hpp = Replace-ExactlyOnce $hpp @'
 Write-Utf8NoBom $hppPath $hpp
 
 $cpp = Read-Normalized $cppPath
+$cpp = Replace-ExactlyOnce $cpp @'
+#include "LAppModel.hpp"
+'@ @'
+#include "LAppModel.hpp"
+#include "AgentHome.hpp"
+'@ 'LAppModel.cpp AgentHome include'
+$cpp = Replace-ExactlyOnce $cpp @'
+LAppModel::LAppModel()
+    : LAppModel_Common()
+'@ @'
+LAppModel::LAppModel()
+    : LAppModel_Common()
+    , _agentHome(new AgentHome())
+'@ 'LAppModel.cpp AgentHome construction'
+$cpp = Replace-ExactlyOnce $cpp @'
+LAppModel::~LAppModel()
+{
+'@ @'
+LAppModel::~LAppModel()
+{
+    delete _agentHome;
+    _agentHome = NULL;
+'@ 'LAppModel.cpp AgentHome destruction'
 $cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
     _model->LoadParameters();
 
     AgentHomeAction homeAction;
-    if (_agentHome.Poll(homeAction))
+    if (_agentHome->Poll(homeAction))
     {
         if (homeAction.Voice >= 0)
         {
@@ -104,14 +132,14 @@ $cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
 $cpp = Replace-ExactlyOnce $cpp @'
         StartRandomMotion(MotionGroupIdle, PriorityIdle);
 '@ @'
-        if (!_agentHome.IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);
+        if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);
 '@ 'LAppModel.cpp idle suppression'
 $cpp = Replace-ExactlyOnce $cpp @'
     _agentExpression.after(_model);
     _agentAudio.update(_model, _lipSyncIds);
 '@ @'
     _agentExpression.after(_model);
-    _agentHome.ApplyOverrides(_model);
+    _agentHome->ApplyOverrides(_model);
     _agentAudio.update(_model, _lipSyncIds);
 '@ 'LAppModel.cpp home parameter overrides'
 $cpp = Replace-ExactlyOnce $cpp @'
@@ -119,7 +147,7 @@ CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt
 '@ @'
 void LAppModel::StartHomeTap()
 {
-    if (!_agentAudio.IsBusy()) _agentHome.RequestTap();
+    if (!_agentAudio.IsBusy()) _agentHome->RequestTap();
 }
 
 CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt32 no, csmInt32 priority,
@@ -142,12 +170,14 @@ Write-Utf8NoBom $managerPath $manager
 $hppCheck = Read-Normalized $hppPath
 $cppCheck = Read-Normalized $cppPath
 $managerCheck = Read-Normalized $managerPath
-if (-not $hppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome include missing after edit.' }
-if (-not $hppCheck.Contains('AgentHome _agentHome;')) { throw 'AgentHome member missing after edit.' }
+if (-not $hppCheck.Contains('class AgentHome;')) { throw 'AgentHome forward declaration missing after edit.' }
+if (-not $hppCheck.Contains('AgentHome* _agentHome;')) { throw 'AgentHome pointer missing after edit.' }
+if ($hppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation leaked into public model header.' }
 if (-not $hppCheck.Contains('void StartHomeTap();')) { throw 'StartHomeTap declaration missing after edit.' }
+if (-not $cppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation include missing in cpp.' }
 if (-not $cppCheck.Contains('_agentAudio.QueueLocalWave(voicePath)')) { throw 'Home audio dispatch missing after edit.' }
-if (-not $cppCheck.Contains('if (!_agentHome.IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);')) { throw 'Home idle suppression missing after edit.' }
-if (-not $cppCheck.Contains('_agentHome.ApplyOverrides(_model);')) { throw 'Home parameter override missing after edit.' }
+if (-not $cppCheck.Contains('if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);')) { throw 'Home idle suppression missing after edit.' }
+if (-not $cppCheck.Contains('_agentHome->ApplyOverrides(_model);')) { throw 'Home parameter override missing after edit.' }
 if (($managerCheck.Split([string[]]@('_models[i]->StartHomeTap();'), [StringSplitOptions]::None).Count - 1) -ne 2) { throw 'Expected exactly two tap routes to StartHomeTap.' }
 if ($managerCheck.Contains('_models[i]->SetRandomExpression();')) { throw 'Old head tap behavior remains.' }
 if ($managerCheck.Contains('_models[i]->StartRandomMotion(MotionGroupTapBody, PriorityNormal, FinishedMotion, BeganMotion);')) { throw 'Old body tap behavior remains.' }
