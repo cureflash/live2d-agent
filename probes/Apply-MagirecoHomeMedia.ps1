@@ -21,11 +21,15 @@ $modelPath=Join-Path $source 'LAppModel.cpp'
 $viewPath=Join-Path $source 'LAppView.cpp'
 
 $model=Read-Normalized $modelPath
-if(-not $model.Contains('#include "AgentBgm.hpp"')){
-    $model=Replace-ExactlyOnce $model "#include \"AgentHome.hpp\"`n" "#include \"AgentHome.hpp\"`n#include \"AgentBgm.hpp\"`n" 'AgentBgm include'
+$agentHomeInclude='#include "AgentHome.hpp"'
+$agentBgmInclude='#include "AgentBgm.hpp"'
+if(-not $model.Contains($agentBgmInclude)){
+    $model=Replace-ExactlyOnce $model $agentHomeInclude ($agentHomeInclude+"`n"+$agentBgmInclude) 'AgentBgm include'
 }
-if(-not $model.Contains('AgentBgm::EnsureStarted("home-audio/bgm00_system01.wav");')){
-    $model=Replace-ExactlyOnce $model "    _agentHome->Configure(dir);`n" "    _agentHome->Configure(dir);`n    AgentBgm::EnsureStarted(\"home-audio/bgm00_system01.wav\");`n" 'BGM startup'
+$configureLine='    _agentHome->Configure(dir);'
+$bgmLine='    AgentBgm::EnsureStarted("home-audio/bgm00_system01.wav");'
+if(-not $model.Contains($bgmLine)){
+    $model=Replace-ExactlyOnce $model $configureLine ($configureLine+"`n"+$bgmLine) 'BGM startup'
 }
 Write-Bom $modelPath $model
 
@@ -38,8 +42,8 @@ Write-Bom $viewPath $view
 
 $modelCheck=Read-Normalized $modelPath
 $viewCheck=Read-Normalized $viewPath
-if(-not $modelCheck.Contains('#include "AgentBgm.hpp"')){throw 'AgentBgm include missing.'}
-if(-not $modelCheck.Contains('AgentBgm::EnsureStarted("home-audio/bgm00_system01.wav");')){throw 'BGM startup missing.'}
+if(-not $modelCheck.Contains($agentBgmInclude)){throw 'AgentBgm include missing.'}
+if(-not $modelCheck.Contains($bgmLine)){throw 'BGM startup missing.'}
 if($viewCheck.Contains('static_cast<float>(height) * 0.95f')){throw 'Background still scaled to 95 percent.'}
 Write-Output 'MAGIRECO_HOME_MEDIA_SOURCE_INTEGRATION_APPLIED'
 Write-Output 'background_fill=true bgm=bgm00_system01 loop=true'
