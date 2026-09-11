@@ -13,38 +13,55 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
 $noxBin='C:\Program Files (x86)\Nox\bin'
-$nox=Join-Path $noxBin 'Nox.exe'
+$noxConsole=Join-Path $noxBin 'NoxConsole.exe'
 $adb=Join-Path $noxBin 'nox_adb.exe'
-$serial='127.0.0.1:62001'
+$script:serial=$null
 $package='io.kamihama.totentanz'
 $androidBase='/data/data/'+$package+'/files/madomagi'
 $modelRemote=$androidBase+'/resource/image_native/live2d_v4/'+$CharacterId
 $scenarioRemote=$androidBase+'/resource/scenario/json/general/'+$ScenarioId+'.json'
 $voiceRemoteDir=$androidBase+'/resource/sound_native/voice'
 
-function Test-NoxDeviceConnected {
-    $devices=@(& $adb devices 2>&1)
-    if($LASTEXITCODE -ne 0){return $false}
-    return [bool]($devices -match ([regex]::Escape($serial)+'\s+device'))
+function Get-NoxDeviceSerial {
+    $lines=@(& $adb devices 2>&1)
+    if($LASTEXITCODE -ne 0){return $null}
+    $devices=New-Object 'System.Collections.Generic.List[string]'
+    foreach($line in $lines){
+        $text=([string]$line).Trim()
+        if($text -match '^(?<serial>\S+)\s+device$'){$devices.Add($Matches['serial'])}
+    }
+    $preferred=@($devices|Where-Object {$_ -match '^(127\.0\.0\.1:|emulator-)'})
+    if($preferred.Count -eq 1){return [string]$preferred[0]}
+    if($devices.Count -eq 1){return [string]$devices[0]}
+    if($devices.Count -gt 1){throw ('NOX_ADB_DEVICE_AMBIGUOUS '+($devices -join ','))}
+    return $null
 }
 
 function Ensure-NoxDevice {
-    if(Test-NoxDeviceConnected){return}
-    if(-not(Test-Path -LiteralPath $nox -PathType Leaf)){throw 'NOX_LAUNCHER_NOT_FOUND'}
-    $existing=@(Get-Process -Name 'Nox' -ErrorAction SilentlyContinue)
-    if($existing.Count -eq 0){
-        $null=Start-Process -FilePath $nox -WorkingDirectory $noxBin -PassThru
-    }
-    $deadline=[DateTime]::UtcNow.AddSeconds(150)
+    $detected=Get-NoxDeviceSerial
+    if($detected){$script:serial=$detected;return}
+    if(-not(Test-Path -LiteralPath $noxConsole -PathType Leaf)){throw 'NOX_CONSOLE_NOT_FOUND'}
+
+    $start=New-Object Diagnostics.Process
+    $start.StartInfo.FileName=$noxConsole
+    $start.StartInfo.Arguments='launch -index:0'
+    $start.StartInfo.WorkingDirectory=$noxBin
+    $start.StartInfo.UseShellExecute=$true
+    if(-not $start.Start()){throw 'NOX_CONSOLE_LAUNCH_FAILED'}
+    $start.Dispose()
+
+    $deadline=[DateTime]::UtcNow.AddSeconds(180)
     do {
         Start-Sleep -Seconds 2
-        if(Test-NoxDeviceConnected){return}
+        $detected=Get-NoxDeviceSerial
+        if($detected){$script:serial=$detected;return}
     } while([DateTime]::UtcNow -lt $deadline)
     throw 'NOX_DEVICE_START_TIMEOUT'
 }
 
 function Invoke-Adb([string[]]$Arguments) {
-    $output=@(& $adb -s $serial @Arguments 2>&1)
+    if(-not $script:serial){throw 'NOX_ADB_SERIAL_NOT_RESOLVED'}
+    $output=@(& $adb -s $script:serial @Arguments 2>&1)
     if($LASTEXITCODE -ne 0){
         throw ('ADB_FAILED '+($Arguments -join ' ')+' :: '+(($output|ForEach-Object {[string]$_}) -join ' | '))
     }
@@ -189,7 +206,7 @@ try {
         CharacterId=$CharacterId
         ScenarioId=$ScenarioId
         Package=$package
-        Device=$serial
+        Device=$script:serial
         AssetRoot=$final
         ModelDirectory=(Join-Path $final 'live2d')
         ModelSource=(Join-Path $final 'live2d\model.model3.json')
