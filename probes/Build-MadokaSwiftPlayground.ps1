@@ -356,7 +356,10 @@ if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -
 $appModule = Join-Path $OutputPath 'Sources\AppModule'
 $webOutput = Join-Path $appModule 'Resources\Web'
 $null = New-Item -ItemType Directory -Path $webOutput -Force
-Copy-Item -LiteralPath (Join-Path $dist '*') -Destination $webOutput -Recurse -Force
+Copy-Item -Path (Join-Path $dist '*') -Destination $webOutput -Recurse -Force
+Require-File (Join-Path $webOutput 'index.html') 'Swift Playgrounds Web index'
+Require-File (Join-Path $webOutput 'Core\live2dcubismcore.min.js') 'Swift Playgrounds Cubism Core'
+Require-File (Join-Path $webOutput 'Resources\Madoka\Madoka.model3.json') 'Swift Playgrounds Madoka model'
 
 $packageSwift = @'
 // swift-tools-version: 5.10
