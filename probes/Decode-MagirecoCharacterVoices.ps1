@@ -77,13 +77,14 @@ try {
         })
     }
 
+    $clipArray=$clips.ToArray()
     $bank=[ordered]@{
         Kind='magireco_private_character_voice_bank'
         CharacterId=$CharacterId
         AssetRoot=[string]$state.AssetRoot
         VoiceDirectory=$waveDir
         Decoder='vgmstream r2117 win64'
-        Clips=@($clips)
+        Clips=$clipArray
         DecodedUtc=[DateTime]::UtcNow.ToString('o')
         CeVIOAccessed=$false
         UploadedToGitHub=$false
@@ -95,7 +96,7 @@ try {
     [ordered]@{
         Kind=$bank.Kind
         CharacterId=$CharacterId
-        DecodedCount=$clips.Count
+        DecodedCount=$clipArray.Count
         Decoder=$bank.Decoder
         CeVIOAccessed=$false
         UploadedToGitHub=$false
