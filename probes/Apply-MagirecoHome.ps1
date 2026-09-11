@@ -28,13 +28,6 @@ function Replace-LineOnce([string]$Text, [string]$Prefix, [string]$New, [string]
     return $Text.Substring(0, $match.Index) + $New + $Text.Substring($match.Index + $match.Length)
 }
 
-function Replace-RegexOnce([string]$Text, [string]$Pattern, [string]$New, [string]$Label) {
-    $matches=[regex]::Matches($Text,$Pattern,[Text.RegularExpressions.RegexOptions]::Singleline)
-    if($matches.Count -ne 1){throw "Expected exactly one regex source block: $Label count=$($matches.Count)"}
-    $m=$matches[0]
-    return $Text.Substring(0,$m.Index)+$New+$Text.Substring($m.Index+$m.Length)
-}
-
 function Write-SourceUtf8Bom([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($true)))
 }
@@ -132,7 +125,11 @@ $cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
                 }
             }
         }
-        if (homeAction.Expression != nullptr) SetExpression(homeAction.Expression);
+        if (homeAction.Expression != nullptr)
+        {
+            const std::string expressionName = std::string(homeAction.Expression) + ".exp3.json";
+            SetExpression(expressionName.c_str());
+        }
     }
 
 '@ 'LAppModel.cpp home dispatcher'
@@ -154,21 +151,21 @@ CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt
 Write-SourceUtf8Bom $cppPath $cpp
 
 $manager = Read-Normalized $managerPath
-$managerPattern='void LAppLive2DManager::OnTap\(csmFloat32 x, csmFloat32 y\) const\s*\{.*?\n\}\n\nvoid LAppLive2DManager::OnUpdate\(\) const'
-$managerReplacement=@'
-void LAppLive2DManager::OnTap(csmFloat32 x, csmFloat32 y) const
-{
-    (void)x;
-    (void)y;
-    for (csmUint32 i = 0; i < _models.GetSize(); ++i)
-    {
-        _models[i]->StartHomeTap();
-    }
-}
-
-void LAppLive2DManager::OnUpdate() const
-'@
-$manager = Replace-RegexOnce $manager $managerPattern $managerReplacement 'LAppLive2DManager.cpp home tap routing'
+$manager = Replace-ExactlyOnce $manager @'
+        if (_models[i]->HitTest(HitAreaNameHead, x, y))
+'@ @'
+        if (true)
+'@ 'LAppLive2DManager.cpp bypass broken hit-area names'
+$manager = Replace-ExactlyOnce $manager @'
+            _models[i]->SetRandomExpression();
+'@ @'
+            _models[i]->StartHomeTap();
+'@ 'LAppLive2DManager.cpp head tap'
+$manager = Replace-ExactlyOnce $manager @'
+            _models[i]->StartRandomMotion(MotionGroupTapBody, PriorityNormal, FinishedMotion, BeganMotion);
+'@ @'
+            _models[i]->StartHomeTap();
+'@ 'LAppLive2DManager.cpp body tap'
 Write-SourceUtf8Bom $managerPath $manager
 
 $hppCheck = Read-Normalized $hppPath
@@ -180,9 +177,10 @@ if ($hppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implement
 if (-not $hppCheck.Contains('void StartHomeTap();')) { throw 'StartHomeTap declaration missing after edit.' }
 if (-not $cppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation include missing in cpp.' }
 if (-not $cppCheck.Contains('_agentAudio.QueueLocalWave(voicePath)')) { throw 'Home audio dispatch missing after edit.' }
+if (-not $cppCheck.Contains('expressionName = std::string(homeAction.Expression) + ".exp3.json"')) { throw 'Home expression-name mapping missing.' }
 if (-not $cppCheck.Contains('if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);')) { throw 'Home idle suppression missing after edit.' }
 if ($cppCheck.Contains('_agentHome->ApplyOverrides(_model);')) { throw 'Unverified cheek/tear override remains enabled.' }
-if (($managerCheck.Split([string[]]@('_models[i]->StartHomeTap();'), [StringSplitOptions]::None).Count - 1) -ne 1) { throw 'Expected direct home tap route.' }
-if ($managerCheck.Contains('HitTest(HitAreaNameHead') -or $managerCheck.Contains('HitTest(HitAreaNameBody')) { throw 'Legacy hit-area gate remains in OnTap.' }
+if (-not $managerCheck.Contains('        if (true)')) { throw 'Broken hit-area gate was not bypassed.' }
+if (($managerCheck.Split([string[]]@('_models[i]->StartHomeTap();'), [StringSplitOptions]::None).Count - 1) -ne 2) { throw 'Expected both legacy tap actions to route home tap.' }
 
 Write-Output 'MAGIRECO_HOME_SOURCE_INTEGRATION_APPLIED'
