@@ -28,8 +28,8 @@ function Replace-LineOnce([string]$Text, [string]$Prefix, [string]$New, [string]
     return $Text.Substring(0, $match.Index) + $New + $Text.Substring($match.Index + $match.Length)
 }
 
-function Write-Utf8NoBom([string]$Path, [string]$Text) {
-    [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($false)))
+function Write-SourceUtf8Bom([string]$Path, [string]$Text) {
+    [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($true)))
 }
 
 $source = [IO.Path]::GetFullPath($SourceRoot)
@@ -66,7 +66,7 @@ $hpp = Replace-ExactlyOnce $hpp @'
     virtual Csm::csmBool HitTest(const Csm::csmChar* hitAreaName, Csm::csmFloat32 x, Csm::csmFloat32 y);
     void StartHomeTap();
 '@ 'LAppModel.hpp StartHomeTap declaration'
-Write-Utf8NoBom $hppPath $hpp
+Write-SourceUtf8Bom $hppPath $hpp
 
 $cpp = Read-Normalized $cppPath
 $cpp = Replace-ExactlyOnce $cpp @'
@@ -152,7 +152,7 @@ void LAppModel::StartHomeTap()
 
 CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt32 no, csmInt32 priority,
 '@ 'LAppModel.cpp StartHomeTap implementation'
-Write-Utf8NoBom $cppPath $cpp
+Write-SourceUtf8Bom $cppPath $cpp
 
 $manager = Read-Normalized $managerPath
 $manager = Replace-ExactlyOnce $manager @'
@@ -165,7 +165,7 @@ $manager = Replace-ExactlyOnce $manager @'
 '@ @'
             _models[i]->StartHomeTap();
 '@ 'LAppLive2DManager.cpp body tap'
-Write-Utf8NoBom $managerPath $manager
+Write-SourceUtf8Bom $managerPath $manager
 
 $hppCheck = Read-Normalized $hppPath
 $cppCheck = Read-Normalized $cppPath
