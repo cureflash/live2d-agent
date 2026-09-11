@@ -52,80 +52,84 @@ class AgentHome
     static const AgentHomeSequence& Sequence(int index)
     {
         static const AgentHomeScene startup[] = {
-            {1.0, 100, "mtn_ex_010.exp3.json", 1.0f, Keep},
-            {1.0,  -1, "mtn_ex_011.exp3.json", 2.0f, Keep},
-            {4.0,   0, "mtn_ex_010.exp3.json", 1.0f, Keep},
-            {1.5,  -1, "mtn_ex_011.exp3.json", 2.0f, Keep},
-            {5.0, 100, "mtn_ex_010.exp3.json", 1.0f, Keep},
+            {1.0, 100, "mtn_ex_010", 1.0f, Keep},
+            {1.0,  -1, "mtn_ex_011", 2.0f, Keep},
+            {4.0,   0, "mtn_ex_010", 1.0f, Keep},
+            {1.5,  -1, "mtn_ex_011", 2.0f, Keep},
+            {5.0, 100, "mtn_ex_010", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk10[] = {
+            {1.0,   0, "mtn_ex_040", -1.0f, Keep},
+            {2.0,  -1, "mtn_ex_041", -1.0f, Keep},
+            {3.0, 100, "mtn_ex_040", -1.0f, Keep},
+            {3.0, 300, "mtn_ex_020", -1.0f, Keep},
+            {2.0,  -1, "mtn_ex_030", -1.0f, Keep},
+            {4.0,   0, "mtn_ex_040", -1.0f, Keep},
         };
         static const AgentHomeScene talk1[] = {
-            {1.0,   0, "mtn_ex_040.exp3.json", -1.0f, Keep},
-            {2.0,  -1, "mtn_ex_041.exp3.json", -1.0f, Keep},
-            {3.0, 100, "mtn_ex_040.exp3.json", -1.0f, Keep},
-            {3.0, 300, "mtn_ex_020.exp3.json", -1.0f, Keep},
-            {2.0,  -1, "mtn_ex_030.exp3.json", -1.0f, Keep},
-            {4.0,   0, "mtn_ex_040.exp3.json", -1.0f, Keep},
+            {1.0, 100, "mtn_ex_011", 2.0f, Keep},
+            {3.0,   0, "mtn_ex_010", 1.0f, Keep},
+            {2.0,  -1, "mtn_ex_011", 2.0f, Keep},
+            {2.0, 300, "mtn_ex_010", 1.0f, Keep},
+            {2.0,  -1, "mtn_ex_011", 2.0f, Keep},
+            {2.0, 100, "mtn_ex_010", 1.0f, Keep},
+            {2.0,  -1, "mtn_ex_041", -1.0f, Keep},
         };
         static const AgentHomeScene talk2[] = {
-            {1.0, 100, "mtn_ex_011.exp3.json", 2.0f, Keep},
-            {3.0,   0, "mtn_ex_010.exp3.json", 1.0f, Keep},
-            {2.0,  -1, "mtn_ex_011.exp3.json", 2.0f, Keep},
-            {2.0, 300, "mtn_ex_010.exp3.json", 1.0f, Keep},
-            {2.0,  -1, "mtn_ex_011.exp3.json", 2.0f, Keep},
-            {2.0, 100, "mtn_ex_010.exp3.json", 1.0f, Keep},
-            {2.0,  -1, "mtn_ex_041.exp3.json", -1.0f, Keep},
+            {4.0,   0, "mtn_ex_030", -1.0f, Keep},
+            {4.0, 100, "mtn_ex_040", -1.0f, Keep},
+            {1.0,   0, "mtn_ex_041", -1.0f, Keep},
+            {5.0,  -1, "mtn_ex_010",  1.0f, Keep},
         };
         static const AgentHomeScene talk3[] = {
-            {4.0,   0, "mtn_ex_030.exp3.json", -1.0f, Keep},
-            {4.0, 100, "mtn_ex_040.exp3.json", -1.0f, Keep},
-            {1.0,   0, "mtn_ex_041.exp3.json", -1.0f, Keep},
-            {5.0,  -1, "mtn_ex_010.exp3.json",  1.0f, Keep},
+            {4.0,   0, "mtn_ex_051", -1.0f, Keep},
+            {4.0, 300, "mtn_ex_030", -1.0f, Keep},
+            {4.0, 100, "mtn_ex_010",  1.0f, Keep},
         };
         static const AgentHomeScene talk4[] = {
-            {4.0,   0, "mtn_ex_051.exp3.json", -1.0f, Keep},
-            {4.0, 300, "mtn_ex_030.exp3.json", -1.0f, Keep},
-            {4.0, 100, "mtn_ex_010.exp3.json",  1.0f, Keep},
+            {4.0,   0, "mtn_ex_040", -1.0f, Keep},
+            {4.0, 300, "mtn_ex_030", -1.0f, Keep},
+            {6.0, 200, "mtn_ex_020", -1.0f, Keep},
+            {3.0,   0, "mtn_ex_010",  1.0f, Keep},
         };
         static const AgentHomeScene talk5[] = {
-            {4.0,   0, "mtn_ex_040.exp3.json", -1.0f, Keep},
-            {4.0, 300, "mtn_ex_030.exp3.json", -1.0f, Keep},
-            {6.0, 200, "mtn_ex_020.exp3.json", -1.0f, Keep},
-            {3.0,   0, "mtn_ex_010.exp3.json",  1.0f, Keep},
+            {5.0,   0, "mtn_ex_040", -1.0f, Keep},
+            {2.0,  -1, "mtn_ex_030", -1.0f, Keep},
+            {6.0, 100, "mtn_ex_010",  1.0f, Keep},
+            {4.0,  -1, "mtn_ex_011",  2.0f, Keep},
         };
         static const AgentHomeScene talk6[] = {
-            {5.0,   0, "mtn_ex_040.exp3.json", -1.0f, Keep},
-            {2.0,  -1, "mtn_ex_030.exp3.json", -1.0f, Keep},
-            {6.0, 100, "mtn_ex_010.exp3.json",  1.0f, Keep},
-            {4.0,  -1, "mtn_ex_011.exp3.json",  2.0f, Keep},
+            {2.0,   0, "mtn_ex_010", 1.0f, Keep},
+            {3.0, 100, nullptr,       Keep, Keep},
+            {6.0, 300, "mtn_ex_011", 2.0f, Keep},
         };
         static const AgentHomeScene talk7[] = {
-            {2.0,   0, "mtn_ex_010.exp3.json", 1.0f, Keep},
-            {3.0, 100, nullptr,                 Keep, Keep},
-            {6.0, 300, "mtn_ex_011.exp3.json", 2.0f, Keep},
+            {3.0, 100, "mtn_ex_051", -1.0f, Keep},
+            {3.5, 300, "mtn_ex_040", -1.0f, Keep},
+            {7.0,   0, "mtn_ex_051", -1.0f, Keep},
         };
         static const AgentHomeScene talk8[] = {
-            {3.0, 100, "mtn_ex_051.exp3.json", -1.0f, Keep},
-            {3.5, 300, "mtn_ex_040.exp3.json", -1.0f, Keep},
-            {7.0,   0, "mtn_ex_051.exp3.json", -1.0f, Keep},
+            {2.0,   0, "mtn_ex_051", 1.0f, Keep},
+            {3.0,  -1, "mtn_ex_030", 2.0f, 1.0f},
+            {2.0, 300, "mtn_ex_040", 2.0f, 1.0f},
+            {3.0,  -1, "mtn_ex_051", 2.0f, 1.0f},
+            {4.0,   0, "mtn_ex_030", 2.0f, 1.0f},
         };
         static const AgentHomeScene talk9[] = {
-            {2.0,   0, "mtn_ex_051.exp3.json", 1.0f, Keep},
-            {3.0,  -1, "mtn_ex_030.exp3.json", 2.0f, 1.0f},
-            {2.0, 300, "mtn_ex_040.exp3.json", 2.0f, 1.0f},
-            {3.0,  -1, "mtn_ex_051.exp3.json", 2.0f, 1.0f},
-            {4.0,   0, "mtn_ex_030.exp3.json", 2.0f, 1.0f},
+            {1.0, 200, "mtn_ex_020", -1.0f, Keep},
         };
         static const AgentHomeSequence sequences[] = {
             {24, startup, sizeof(startup) / sizeof(startup[0])},
-            {33, talk1, sizeof(talk1) / sizeof(talk1[0])},
-            {34, talk2, sizeof(talk2) / sizeof(talk2[0])},
-            {35, talk3, sizeof(talk3) / sizeof(talk3[0])},
-            {36, talk4, sizeof(talk4) / sizeof(talk4[0])},
-            {37, talk5, sizeof(talk5) / sizeof(talk5[0])},
-            {38, talk6, sizeof(talk6) / sizeof(talk6[0])},
-            {39, talk7, sizeof(talk7) / sizeof(talk7[0])},
-            {40, talk8, sizeof(talk8) / sizeof(talk8[0])},
-            {41, talk9, sizeof(talk9) / sizeof(talk9[0])},
+            {33, talk10, sizeof(talk10) / sizeof(talk10[0])},
+            {34, talk1, sizeof(talk1) / sizeof(talk1[0])},
+            {35, talk2, sizeof(talk2) / sizeof(talk2[0])},
+            {36, talk3, sizeof(talk3) / sizeof(talk3[0])},
+            {37, talk4, sizeof(talk4) / sizeof(talk4[0])},
+            {38, talk5, sizeof(talk5) / sizeof(talk5[0])},
+            {39, talk6, sizeof(talk6) / sizeof(talk6[0])},
+            {40, talk7, sizeof(talk7) / sizeof(talk7[0])},
+            {41, talk8, sizeof(talk8) / sizeof(talk8[0])},
+            {42, talk9, sizeof(talk9) / sizeof(talk9[0])},
         };
         return sequences[index];
     }
@@ -196,7 +200,7 @@ public:
             {
                 _tapPending = false;
                 ++_tapSerial;
-                const int tapIndex = 1 + static_cast<int>((now + static_cast<ULONGLONG>(_tapSerial) * 2654435761ULL) % 9ULL);
+                const int tapIndex = 1 + static_cast<int>((now + static_cast<ULONGLONG>(_tapSerial) * 2654435761ULL) % 10ULL);
                 Begin(tapIndex, now);
             }
             else
