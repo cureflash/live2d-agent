@@ -7,7 +7,7 @@
  #include "AgentExpression.hpp"
 +#include <Id/CubismIdManager.hpp>
 +#include "AgentHome.hpp"
-@@ -24,6 +26,7 @@
+@@ -25,6 +27,7 @@
   */
  class LAppModel : public LAppModel_Common
  {
@@ -15,7 +15,7 @@
      AgentExpression _agentExpression;
 +    AgentHome _agentHome;
  public:
-@@ -118 +121,2 @@
+@@ -117 +120,2 @@
      virtual Csm::csmBool HitTest(const Csm::csmChar* hitAreaName, Csm::csmFloat32 x, Csm::csmFloat32 y);
 +    void StartHomeTap();
 --- a/Samples/D3D11/Demo/proj.d3d11.cmake/src/LAppModel.cpp
@@ -60,13 +60,13 @@
 @@ -387 +419 @@
 -        StartRandomMotion(MotionGroupIdle, PriorityIdle);
 +        if (!_agentHome.IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);
-@@ -413,4 +445,5 @@
+@@ -410,4 +442,5 @@
      _agentExpression.before(_model);
      _updateScheduler.OnLateUpdate(_model, deltaTimeSeconds);
      _agentExpression.after(_model);
 +    _agentHome.ApplyOverrides(_model);
      _agentAudio.update(_model, _lipSyncIds);
-@@ -420 +453,6 @@
+@@ -417 +450,6 @@
  }
 +
 +void LAppModel::StartHomeTap()
