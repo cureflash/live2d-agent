@@ -21,25 +21,20 @@ try {
     $built=Get-Content -LiteralPath $statePath -Raw -Encoding UTF8|ConvertFrom-Json
     if(-not(Test-Path -LiteralPath $built.SDKRoot -PathType Container)){throw 'SDK_ROOT_NOT_FOUND'}
 
-    $roots=@(
-        (Join-Path $env:USERPROFILE 'Desktop'),
-        (Join-Path $env:USERPROFILE 'Documents'),
-        (Join-Path $env:USERPROFILE 'Downloads')
-    )|Where-Object {Test-Path -LiteralPath $_ -PathType Container}
-
-    $candidates=@()
-    foreach($root in $roots){
-        $candidates+=@(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.model3.json' -ErrorAction SilentlyContinue|
-            Where-Object {
-                $_.FullName -match '[\\/]100300[\\/]' -and
-                ($_.Name -eq 'model.model3.json' -or $_.Name -eq 'model-100300.model3.json')
-            })
+    $assetStatePath=Join-Path $base 'magireco-character-100300.json'
+    if(-not(Test-Path -LiteralPath $assetStatePath -PathType Leaf)){throw 'TSURUNO_EXTRACTED_ASSET_STATE_NOT_FOUND'}
+    $assetState=Get-Content -LiteralPath $assetStatePath -Raw -Encoding UTF8|ConvertFrom-Json
+    if([string]$assetState.CharacterId -ne '100300' -or [string]$assetState.ScenarioId -ne '100300'){
+        throw 'TSURUNO_EXTRACTED_ASSET_STATE_MISMATCH'
     }
-    $candidates=@($candidates|Sort-Object FullName -Unique)
-    if($candidates.Count -eq 0){throw 'TSURUNO_MODEL_NOT_FOUND: expected local 100300 model under Desktop/Documents/Downloads'}
-    $preferred=@($candidates|Where-Object {$_.Name -eq 'model.model3.json'})
-    $config=if($preferred.Count -eq 1){$preferred[0]}elseif($candidates.Count -eq 1){$candidates[0]}else{throw 'TSURUNO_MODEL_AMBIGUOUS'}
-    $sourceRoot=$config.DirectoryName
+    $assetRoot=[IO.Path]::GetFullPath([string]$assetState.AssetRoot)
+    $sourceRoot=[IO.Path]::GetFullPath([string]$assetState.ModelDirectory)
+    $configPath=[IO.Path]::GetFullPath([string]$assetState.ModelSource)
+    if(-not $sourceRoot.StartsWith($assetRoot+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'TSURUNO_MODEL_DIRECTORY_OUTSIDE_ASSET_ROOT'}
+    if(-not $configPath.StartsWith($sourceRoot+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'TSURUNO_MODEL_CONFIG_OUTSIDE_MODEL_DIRECTORY'}
+    if(-not(Test-Path -LiteralPath $sourceRoot -PathType Container)){throw 'TSURUNO_MODEL_DIRECTORY_NOT_FOUND'}
+    if(-not(Test-Path -LiteralPath $configPath -PathType Leaf)){throw 'TSURUNO_MODEL_CONFIG_NOT_FOUND'}
+    $config=Get-Item -LiteralPath $configPath
     $model=Get-Content -LiteralPath $config.FullName -Raw -Encoding UTF8|ConvertFrom-Json
     if($model.Version -ne 3 -or -not $model.FileReferences.Moc){throw 'TSURUNO_MODEL_UNSUPPORTED'}
 
