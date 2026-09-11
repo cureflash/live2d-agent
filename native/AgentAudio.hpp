@@ -29,6 +29,10 @@ class AgentAudio {
     unsigned positionUpdates = 0;
     float peakMouth = 0;
     static unsigned u32(const char* p) { unsigned v; std::memcpy(&v,p,4); return v; }
+    static bool diagnosticFlag(const char* name) {
+        char value[8] = {};
+        return GetEnvironmentVariableA(name, value, sizeof(value)) > 0;
+    }
     static int mouthIndex(Live2D::Cubism::Framework::CubismModel* model) {
         using namespace Live2D::Cubism::Framework;
         const CubismIdHandle target = CubismFramework::GetIdManager()->GetId("ParamMouthOpenY");
@@ -196,8 +200,8 @@ public:
                 }
             } catch(const std::exception& error) { status(error.what()); close(); }
         }
-        // Own only ParamMouthOpenY while playback remains active. Mouth-form/cheek/etc. stay authored by the model.
-        if(managed) {
+        // Diagnostic flag is inert in normal launches; it isolates audio-driven mouth opening only.
+        if(managed && !diagnosticFlag("LIVE2D_AGENT_DIAG_DISABLE_LIPSYNC")) {
             const int p=mouthIndex(model);
             if(p>=0) model->SetParameterValue(p,mouth);
         }
