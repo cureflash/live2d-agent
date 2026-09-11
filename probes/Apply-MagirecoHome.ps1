@@ -98,6 +98,10 @@ $cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
     AgentHomeAction homeAction;
     if (_agentHome->Poll(homeAction))
     {
+        char diagMotion[8] = {};
+        char diagExpression[8] = {};
+        const bool disableMotion = GetEnvironmentVariableA("LIVE2D_AGENT_DIAG_DISABLE_MOTION", diagMotion, sizeof(diagMotion)) > 0;
+        const bool disableExpression = GetEnvironmentVariableA("LIVE2D_AGENT_DIAG_DISABLE_EXPRESSION", diagExpression, sizeof(diagExpression)) > 0;
         if (homeAction.Voice >= 0)
         {
             const std::string number = homeAction.Voice < 10
@@ -109,7 +113,7 @@ $cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
                 LAppPal::PrintLogLn("[APP]home voice queue rejected: [%s]", voicePath.c_str());
             }
         }
-        if (homeAction.Motion >= 0)
+        if (homeAction.Motion >= 0 && !disableMotion)
         {
             const std::string motionName = homeAction.Motion == 0
                 ? std::string("motion_000.motion3.json")
@@ -125,7 +129,7 @@ $cpp = Replace-LineOnce $cpp '    _model->LoadParameters();' @'
                 }
             }
         }
-        if (homeAction.Expression != nullptr)
+        if (homeAction.Expression != nullptr && !disableExpression)
         {
             const std::string expressionName = std::string(homeAction.Expression) + ".exp3.json";
             SetExpression(expressionName.c_str());
@@ -138,6 +142,45 @@ $cpp = Replace-ExactlyOnce $cpp @'
 '@ @'
         if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);
 '@ 'LAppModel.cpp idle suppression'
+$cpp = Replace-ExactlyOnce $cpp @'
+    _agentExpression.after(_model);
+    _agentAudio.update(_model, _lipSyncIds);
+'@ @'
+    _agentExpression.after(_model);
+    _agentAudio.update(_model, _lipSyncIds);
+
+    char traceMouthFlag[8] = {};
+    if (GetEnvironmentVariableA("LIVE2D_AGENT_TRACE_MOUTH", traceMouthFlag, sizeof(traceMouthFlag)) > 0)
+    {
+        static ULONGLONG nextMouthTrace = 0;
+        const ULONGLONG traceNow = GetTickCount64();
+        if (traceNow >= nextMouthTrace)
+        {
+            nextMouthTrace = traceNow + 100;
+            const char* parameterNames[] = {
+                "ParamMouthForm", "ParamMouthForm2", "ParamMouthOpenY", "ParamCheek", "ParamTear"
+            };
+            std::ofstream trace("home-mouth-trace.log", std::ios::app);
+            trace << "tick_ms=" << traceNow;
+            for (int n = 0; n < 5; ++n)
+            {
+                const CubismIdHandle target = CubismFramework::GetIdManager()->GetId(parameterNames[n]);
+                bool found = false;
+                for (int p = 0; p < _model->GetParameterCount(); ++p)
+                {
+                    if (_model->GetParameterId(p) == target)
+                    {
+                        trace << " " << parameterNames[n] << "=" << _model->GetParameterValue(p);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) trace << " " << parameterNames[n] << "=NA";
+            }
+            trace << "\n";
+        }
+    }
+'@ 'LAppModel.cpp mouth parameter trace'
 $cpp = Replace-ExactlyOnce $cpp @'
 CubismMotionQueueEntryHandle LAppModel::StartMotion(const csmChar* group, csmInt32 no, csmInt32 priority,
 '@ @'
@@ -177,6 +220,9 @@ if ($hppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implement
 if (-not $hppCheck.Contains('void StartHomeTap();')) { throw 'StartHomeTap declaration missing after edit.' }
 if (-not $cppCheck.Contains('#include "AgentHome.hpp"')) { throw 'AgentHome implementation include missing in cpp.' }
 if (-not $cppCheck.Contains('_agentAudio.QueueLocalWave(voicePath)')) { throw 'Home audio dispatch missing after edit.' }
+if (-not $cppCheck.Contains('LIVE2D_AGENT_DIAG_DISABLE_MOTION')) { throw 'Motion diagnostic gate missing.' }
+if (-not $cppCheck.Contains('LIVE2D_AGENT_DIAG_DISABLE_EXPRESSION')) { throw 'Expression diagnostic gate missing.' }
+if (-not $cppCheck.Contains('LIVE2D_AGENT_TRACE_MOUTH')) { throw 'Mouth trace missing.' }
 if (-not $cppCheck.Contains('expressionName = std::string(homeAction.Expression) + ".exp3.json"')) { throw 'Home expression-name mapping missing.' }
 if (-not $cppCheck.Contains('if (!_agentHome->IsActive()) StartRandomMotion(MotionGroupIdle, PriorityIdle);')) { throw 'Home idle suppression missing after edit.' }
 if ($cppCheck.Contains('_agentHome->ApplyOverrides(_model);')) { throw 'Unverified cheek/tear override remains enabled.' }
