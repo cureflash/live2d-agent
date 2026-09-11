@@ -12,13 +12,36 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
-$adb='C:\Program Files (x86)\Nox\bin\nox_adb.exe'
+$noxBin='C:\Program Files (x86)\Nox\bin'
+$nox=Join-Path $noxBin 'Nox.exe'
+$adb=Join-Path $noxBin 'nox_adb.exe'
 $serial='127.0.0.1:62001'
 $package='io.kamihama.totentanz'
 $androidBase='/data/data/'+$package+'/files/madomagi'
 $modelRemote=$androidBase+'/resource/image_native/live2d_v4/'+$CharacterId
 $scenarioRemote=$androidBase+'/resource/scenario/json/general/'+$ScenarioId+'.json'
 $voiceRemoteDir=$androidBase+'/resource/sound_native/voice'
+
+function Test-NoxDeviceConnected {
+    $devices=@(& $adb devices 2>&1)
+    if($LASTEXITCODE -ne 0){return $false}
+    return [bool]($devices -match ([regex]::Escape($serial)+'\s+device'))
+}
+
+function Ensure-NoxDevice {
+    if(Test-NoxDeviceConnected){return}
+    if(-not(Test-Path -LiteralPath $nox -PathType Leaf)){throw 'NOX_LAUNCHER_NOT_FOUND'}
+    $existing=@(Get-Process -Name 'Nox' -ErrorAction SilentlyContinue)
+    if($existing.Count -eq 0){
+        $null=Start-Process -FilePath $nox -WorkingDirectory $noxBin -PassThru
+    }
+    $deadline=[DateTime]::UtcNow.AddSeconds(150)
+    do {
+        Start-Sleep -Seconds 2
+        if(Test-NoxDeviceConnected){return}
+    } while([DateTime]::UtcNow -lt $deadline)
+    throw 'NOX_DEVICE_START_TIMEOUT'
+}
 
 function Invoke-Adb([string[]]$Arguments) {
     $output=@(& $adb -s $serial @Arguments 2>&1)
@@ -59,9 +82,7 @@ function Get-ModelReferences($Model) {
 $stage=$null
 try {
     if(-not(Test-Path -LiteralPath $adb -PathType Leaf)){throw 'NOX_ADB_NOT_FOUND'}
-    $devices=@(& $adb devices 2>&1)
-    if($LASTEXITCODE -ne 0){throw 'NOX_ADB_DEVICES_FAILED'}
-    if(-not($devices -match ([regex]::Escape($serial)+'\s+device'))){throw 'NOX_DEVICE_NOT_CONNECTED'}
+    Ensure-NoxDevice
 
     $packages=Invoke-Adb @('shell','pm list packages')
     if(-not($packages -contains ('package:'+$package))){throw 'TOTENTANZ_PACKAGE_NOT_FOUND'}
@@ -81,9 +102,9 @@ try {
     $voiceDir=Join-Path $stage 'voice-hca'
     $null=New-Item -ItemType Directory -Path $live2d,$scenarioDir,$voiceDir -Force
 
-    $pullModel=Invoke-Adb @('pull',($modelRemote+'/.'),$live2d)
+    $null=Invoke-Adb @('pull',($modelRemote+'/.'),$live2d)
     $scenarioLocal=Join-Path $scenarioDir ($ScenarioId+'.json')
-    $pullScenario=Invoke-Adb @('pull',$scenarioRemote,$scenarioLocal)
+    $null=Invoke-Adb @('pull',$scenarioRemote,$scenarioLocal)
 
     $modelPath=Join-Path $live2d 'model.model3.json'
     if(-not(Test-Path -LiteralPath $modelPath -PathType Leaf)){throw 'MODEL_CONFIG_NOT_EXTRACTED'}
@@ -100,7 +121,7 @@ try {
     if($missingRefs.Count -gt 0){throw ('MODEL_REFERENCES_MISSING '+($missingRefs -join ','))}
 
     $scenarioRaw=Get-Content -LiteralPath $scenarioLocal -Raw -Encoding UTF8
-    $scenario=$scenarioRaw|ConvertFrom-Json
+    $null=$scenarioRaw|ConvertFrom-Json
     $voiceNames=@([regex]::Matches($scenarioRaw,'"voice"\s*:\s*"(?<voice>[^"]+)"')|ForEach-Object {$_.Groups['voice'].Value}|Sort-Object -Unique)
     $voicePrefixes=@($voiceNames|ForEach-Object {if($_ -match '^vo_char_(\d{4})_'){$Matches[1]}}|Where-Object {$_}|Sort-Object -Unique)
     $remoteVoices=New-Object 'System.Collections.Generic.List[string]'
@@ -124,6 +145,11 @@ try {
     $bytes=[Text.Encoding]::UTF8.GetBytes(($hashLines -join "`n"))
     $sha=[Security.Cryptography.SHA256]::Create()
     try{$fingerprint=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','')}finally{$sha.Dispose()}
+
+    $motionCount=0
+    if($model.FileReferences.Motions){
+        foreach($p in $model.FileReferences.Motions.PSObject.Properties){$motionCount+=@($p.Value).Count}
+    }
 
     $finalParent=Join-Path $assetRoot $CharacterId
     $null=New-Item -ItemType Directory -Path $finalParent -Force
@@ -149,7 +175,7 @@ try {
         ReferencedFileCount=$refs.Count
         TextureCount=@($model.FileReferences.Textures).Count
         ExpressionCount=@($model.FileReferences.Expressions).Count
-        MotionCount=@(if($model.FileReferences.Motions){foreach($p in $model.FileReferences.Motions.PSObject.Properties){@($p.Value).Count}}).Count
+        MotionCount=$motionCount
         AssetFingerprintSHA256=$fingerprint
         ExtractedUtc=[DateTime]::UtcNow.ToString('o')
         SourceAssetsModified=$false
