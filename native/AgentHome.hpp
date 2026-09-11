@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <cstddef>
+#include <string>
 #include <CubismFramework.hpp>
 #include <Id/CubismIdManager.hpp>
 #include <Model/CubismModel.hpp>
@@ -33,6 +34,13 @@ class AgentHome
 {
     static constexpr float Keep = 99.0f;
 
+    enum class Profile
+    {
+        Madoka,
+        HaregiMadoka
+    };
+
+    Profile _profile = Profile::Madoka;
     bool _startupPending = true;
     bool _tapPending = false;
     bool _active = false;
@@ -49,7 +57,7 @@ class AgentHome
     ULONGLONG _bootAt = GetTickCount64() + 500;
     ULONGLONG _sceneStarted = 0;
 
-    static const AgentHomeSequence& Sequence(int index)
+    static const AgentHomeSequence& MadokaSequence(int index)
     {
         static const AgentHomeScene startup[] = {
             {1.0, 100, "mtn_ex_010", 1.0f, Keep},
@@ -134,6 +142,105 @@ class AgentHome
         return sequences[index];
     }
 
+    static const AgentHomeSequence& HaregiSequence(int index)
+    {
+        // Magia Record general/210000.json: startup group_16, tap groups 25..34.
+        static const AgentHomeScene startup[] = {
+            {2.8, 300, "mtn_ex_011", 1.0f, Keep},
+            {3.3,   0, "mtn_ex_010", 1.0f, Keep},
+            {3.8,   1, nullptr,       Keep, Keep},
+            {5.0, 100, "mtn_ex_011", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk10[] = {
+            {3.5, 100, "mtn_ex_010", 1.0f, Keep},
+            {3.0,  -1, "mtn_ex_041", 1.0f, Keep},
+            {2.8,   0, "mtn_ex_010", 1.0f, Keep},
+            {3.0, 201, "mtn_ex_020", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk1[] = {
+            {5.5,   1, "mtn_ex_041", 1.0f, Keep},
+            {4.8,   0, "mtn_ex_010", 1.0f, Keep},
+            {4.0, 100, "mtn_ex_011", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk2[] = {
+            {3.0,   0, "mtn_ex_010", 1.0f, Keep},
+            {6.0,   1, nullptr,       Keep, Keep},
+            {0.1,  -1, nullptr,       Keep, Keep},
+            {5.0, 100, nullptr,       Keep, Keep},
+        };
+        static const AgentHomeScene talk3[] = {
+            {3.5, 300, "mtn_ex_010", 1.0f, Keep},
+            {3.0,   0, nullptr,       Keep, Keep},
+            {2.0, 201, nullptr,       Keep, Keep},
+            {3.0,  -1, "mtn_ex_011", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk4[] = {
+            {4.0, 100, "mtn_ex_010", 1.0f, Keep},
+            {2.0,   1, nullptr,       Keep, Keep},
+            {4.0,  -1, "mtn_ex_041", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk5[] = {
+            {5.2,   1, "mtn_ex_040", 0.0f, Keep},
+            {3.5, 300, "mtn_ex_020", 0.0f, Keep},
+            {2.0,  -1, "mtn_ex_011", 0.0f, Keep},
+            {3.0,   0, "mtn_ex_010", 0.0f, Keep},
+        };
+        static const AgentHomeScene talk6[] = {
+            {2.5, 100, "mtn_ex_010", 1.0f, Keep},
+            {6.0,   1, nullptr,       Keep, Keep},
+            {0.1,  -1, nullptr,       Keep, Keep},
+            {6.0, 201, nullptr,       Keep, Keep},
+        };
+        static const AgentHomeScene talk7[] = {
+            {4.5, 100, "mtn_ex_010", 1.0f, Keep},
+            {3.5,   1, nullptr,       Keep, Keep},
+            {6.0,  -1, "mtn_ex_011", 1.0f, Keep},
+        };
+        static const AgentHomeScene talk8[] = {
+            {1.5,   1, "mtn_ex_041", 2.0f, Keep},
+            {4.5,  -1, "mtn_ex_040", 2.0f, Keep},
+            {4.0, 300, "mtn_ex_041", 2.0f, Keep},
+        };
+        static const AgentHomeScene talk9[] = {
+            {3.0, 300, "mtn_ex_020", 0.0f, Keep},
+        };
+        static const AgentHomeSequence sequences[] = {
+            {24, startup, sizeof(startup) / sizeof(startup[0])},
+            {33, talk10, sizeof(talk10) / sizeof(talk10[0])},
+            {34, talk1, sizeof(talk1) / sizeof(talk1[0])},
+            {35, talk2, sizeof(talk2) / sizeof(talk2[0])},
+            {36, talk3, sizeof(talk3) / sizeof(talk3[0])},
+            {37, talk4, sizeof(talk4) / sizeof(talk4[0])},
+            {38, talk5, sizeof(talk5) / sizeof(talk5[0])},
+            {39, talk6, sizeof(talk6) / sizeof(talk6[0])},
+            {40, talk7, sizeof(talk7) / sizeof(talk7[0])},
+            {41, talk8, sizeof(talk8) / sizeof(talk8[0])},
+            {42, talk9, sizeof(talk9) / sizeof(talk9[0])},
+        };
+        return sequences[index];
+    }
+
+    const AgentHomeSequence& Sequence(int index) const
+    {
+        return _profile == Profile::HaregiMadoka ? HaregiSequence(index) : MadokaSequence(index);
+    }
+
+    void ResetForProfile()
+    {
+        _startupPending = true;
+        _tapPending = false;
+        _active = false;
+        _emitPending = false;
+        _voicePending = false;
+        _cheekSet = false;
+        _tearSet = false;
+        _resetTearPending = false;
+        _sequenceIndex = -1;
+        _sceneIndex = 0;
+        _bootAt = GetTickCount64() + 500;
+        _sceneStarted = 0;
+    }
+
     void Begin(int sequenceIndex, ULONGLONG now)
     {
         _sequenceIndex = sequenceIndex;
@@ -176,6 +283,18 @@ class AgentHome
     }
 
 public:
+    void Configure(const char* modelHomeDir)
+    {
+        const std::string path = modelHomeDir != nullptr ? std::string(modelHomeDir) : std::string();
+        _profile = path.find("haregi") != std::string::npos ? Profile::HaregiMadoka : Profile::Madoka;
+        ResetForProfile();
+    }
+
+    const char* VoicePrefix() const
+    {
+        return _profile == Profile::HaregiMadoka ? "vo_char_2100_00" : "vo_char_2001_00";
+    }
+
     bool IsActive() const { return _active || _startupPending || _tapPending; }
 
     bool RequestTap()
