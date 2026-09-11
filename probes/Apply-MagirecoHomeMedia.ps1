@@ -19,6 +19,7 @@ function Write-Bom([string]$Path,[string]$Text){[IO.File]::WriteAllText($Path,$T
 $source=[IO.Path]::GetFullPath($SourceRoot)
 $modelPath=Join-Path $source 'LAppModel.cpp'
 $viewPath=Join-Path $source 'LAppView.cpp'
+$delegatePath=Join-Path $source 'LAppDelegate.cpp'
 
 $model=Read-Normalized $modelPath
 $agentHomeInclude='#include "AgentHome.hpp"'
@@ -27,11 +28,36 @@ if(-not $model.Contains($agentBgmInclude)){
     $model=Replace-ExactlyOnce $model $agentHomeInclude ($agentHomeInclude+"`n"+$agentBgmInclude) 'AgentBgm include'
 }
 $configureLine='    _agentHome->Configure(dir);'
-$bgmLine='    AgentBgm::EnsureStarted("home-audio/bgm00_system01.wav");'
-if(-not $model.Contains($bgmLine)){
-    $model=Replace-ExactlyOnce $model $configureLine ($configureLine+"`n"+$bgmLine) 'BGM startup'
+$oldBgmLine='    AgentBgm::EnsureStarted("home-audio/bgm00_system01.wav");'
+$newBgmLine='    AgentBgm::EnsureStarted();'
+if($model.Contains($oldBgmLine)){
+    $model=$model.Replace($oldBgmLine,$newBgmLine)
+}
+elseif(-not $model.Contains($newBgmLine)){
+    $model=Replace-ExactlyOnce $model $configureLine ($configureLine+"`n"+$newBgmLine) 'BGM startup'
 }
 Write-Bom $modelPath $model
+
+$delegate=Read-Normalized $delegatePath
+$delegateInclude='#include "LAppDelegate.hpp"'
+if(-not $delegate.Contains($agentBgmInclude)){
+    $delegate=Replace-ExactlyOnce $delegate $delegateInclude ($delegateInclude+"`n"+$agentBgmInclude) 'AgentBgm delegate include'
+}
+if(-not $delegate.Contains('AgentBgm::Cycle();')){
+    $mouseMarker='    case WM_MOUSEMOVE:'
+    $keyBlock=@'
+    case WM_KEYUP:
+        if (wParam == 'B')
+        {
+            AgentBgm::Cycle();
+            return 0;
+        }
+        break;
+
+'@
+    $delegate=Replace-ExactlyOnce $delegate $mouseMarker ($keyBlock+$mouseMarker) 'B key BGM selector'
+}
+Write-Bom $delegatePath $delegate
 
 $view=Read-Normalized $viewPath
 $old='fHeight = static_cast<float>(height) * 0.95f;'
@@ -42,8 +68,10 @@ Write-Bom $viewPath $view
 
 $modelCheck=Read-Normalized $modelPath
 $viewCheck=Read-Normalized $viewPath
+$delegateCheck=Read-Normalized $delegatePath
 if(-not $modelCheck.Contains($agentBgmInclude)){throw 'AgentBgm include missing.'}
-if(-not $modelCheck.Contains($bgmLine)){throw 'BGM startup missing.'}
+if(-not $modelCheck.Contains($newBgmLine)){throw 'BGM startup missing.'}
+if(-not $delegateCheck.Contains('AgentBgm::Cycle();')){throw 'B-key BGM selector missing.'}
 if($viewCheck.Contains('static_cast<float>(height) * 0.95f')){throw 'Background still scaled to 95 percent.'}
 Write-Output 'MAGIRECO_HOME_MEDIA_SOURCE_INTEGRATION_APPLIED'
-Write-Output 'background_fill=true bgm=bgm00_system01 loop=true'
+Write-Output 'background_fill=true bgm_default=bgm01_anime06 bgm_alt=bgm00_system01 selector=B loop=true'
