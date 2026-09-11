@@ -1,0 +1,172 @@
+name: Windows Tsuruno clone movement probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['test/tsuruno-clone']
+    paths:
+      - '.github/workflows/windows-tsuruno-clone-probe.yml'
+      - 'native/AgentHomeTsuruno.hpp'
+      - 'native/tsuruno-home-behavior.patch'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.repository == 'cureflash/live2d-agent' && github.ref == 'refs/heads/test/tsuruno-clone'
+    runs-on: [self-hosted, Windows, X64, live2d-agent]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and launch isolated Tsuruno movement clone
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $process = $null
+          try {
+            $base = Join-Path $env:LOCALAPPDATA 'live2d-agent'
+            $buildStatePath = Join-Path $base 'sample-build.json'
+            if (-not (Test-Path -LiteralPath $buildStatePath -PathType Leaf)) {
+              throw 'SAMPLE_BUILD_STATE_NOT_FOUND'
+            }
+            $built = Get-Content -LiteralPath $buildStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if (-not (Test-Path -LiteralPath $built.SDKRoot -PathType Container)) {
+              throw 'SDK_ROOT_NOT_FOUND'
+            }
+
+            $roots = @(
+              (Join-Path $env:USERPROFILE 'Desktop'),
+              (Join-Path $env:USERPROFILE 'Documents'),
+              (Join-Path $env:USERPROFILE 'Downloads')
+            ) | Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+
+            $candidates = @()
+            foreach ($root in $roots) {
+              $candidates += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.model3.json' -ErrorAction SilentlyContinue |
+                Where-Object {
+                  $_.FullName -match '[\\/]100300[\\/]' -and
+                  ($_.Name -eq 'model.model3.json' -or $_.Name -eq 'model-100300.model3.json')
+                })
+            }
+            $candidates = @($candidates | Sort-Object FullName -Unique)
+            if ($candidates.Count -eq 0) {
+              throw 'TSURUNO_MODEL_NOT_FOUND: expected a local 100300 model under Desktop/Documents/Downloads'
+            }
+            $preferred = @($candidates | Where-Object { $_.Name -eq 'model.model3.json' })
+            $config = if ($preferred.Count -eq 1) { $preferred[0] } elseif ($candidates.Count -eq 1) { $candidates[0] } else { throw 'TSURUNO_MODEL_AMBIGUOUS: multiple local 100300 model configurations found' }
+            $sourceRoot = $config.DirectoryName
+            $model = Get-Content -LiteralPath $config.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($model.Version -ne 3 -or -not $model.FileReferences.Moc) {
+              throw 'TSURUNO_MODEL_UNSUPPORTED'
+            }
+
+            $motionFiles = @()
+            if ($model.FileReferences.Motions.Motion) {
+              $motionFiles = @($model.FileReferences.Motions.Motion | ForEach-Object { [string]$_.File })
+            }
+            foreach ($required in @('motion_000.motion3.json','motion_101.motion3.json','motion_200.motion3.json','motion_400.motion3.json')) {
+              if (-not ($motionFiles | Where-Object { [IO.Path]::GetFileName($_) -eq $required })) {
+                throw ('TSURUNO_REQUIRED_MOTION_MISSING: ' + $required)
+              }
+            }
+
+            $work = Join-Path $base ('tsuruno-clone-build-' + $env:GITHUB_RUN_ID)
+            $relative = 'Samples\D3D11\Demo\proj.d3d11.cmake'
+            $source = Join-Path $work $relative
+            $null = New-Item -ItemType Directory -Path $source -Force
+            Copy-Item -LiteralPath (Join-Path $built.SDKRoot ($relative + '\src')) -Destination $source -Recurse
+
+            $cmakeText = Get-Content -LiteralPath (Join-Path $built.SDKRoot ($relative + '\CMakeLists.txt')) -Raw -Encoding UTF8
+            $needle = 'set(SDK_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../../..)'
+            if (-not $cmakeText.Contains($needle)) { throw 'SDK_CMAKE_SOURCE_DIFFERS' }
+            $cmakeText = $cmakeText.Replace($needle, ('set(SDK_ROOT_PATH "' + $built.SDKRoot.Replace('\','/') + '")'))
+            [IO.File]::WriteAllText((Join-Path $source 'CMakeLists.txt'), $cmakeText, (New-Object Text.UTF8Encoding($false)))
+
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'native\AgentAudio.hpp') -Destination (Join-Path $source 'src\AgentAudio.hpp')
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'native\AgentExpression.hpp') -Destination (Join-Path $source 'src\AgentExpression.hpp')
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'native\AgentHomeTsuruno.hpp') -Destination (Join-Path $source 'src\AgentHomeTsuruno.hpp')
+
+            foreach ($patchName in @('sdk-integration.patch','expression-control.patch','tsuruno-home-behavior.patch')) {
+              $patch = Join-Path $env:GITHUB_WORKSPACE ('native\' + $patchName)
+              & git -C $work apply --check --ignore-space-change $patch
+              if ($LASTEXITCODE -ne 0) { throw ('PATCH_CHECK_FAILED: ' + $patchName) }
+              & git -C $work apply --ignore-space-change $patch
+              if ($LASTEXITCODE -ne 0) { throw ('PATCH_APPLY_FAILED: ' + $patchName) }
+            }
+
+            $vswhere = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+            $installations = @(& $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath)
+            if ($LASTEXITCODE -ne 0 -or $installations.Count -ne 1) { throw 'V143_INSTALLATION_NOT_UNIQUE' }
+            $cmake = Join-Path $installations[0] 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+            $buildDir = Join-Path $work 'build'
+            & $cmake -S $source -B $buildDir -G 'Visual Studio 18 2026' -A x64 -T 'v143,version=14.44.35207' *> (Join-Path $work 'configure.log')
+            if ($LASTEXITCODE -ne 0) { throw 'TSURUNO_CONFIGURE_FAILED' }
+            & $cmake --build $buildDir --config Release --parallel 2 *> (Join-Path $work 'build.log')
+            if ($LASTEXITCODE -ne 0) {
+              Get-Content -LiteralPath (Join-Path $work 'build.log') | Where-Object { $_ -match 'error [A-Z]+[0-9]+' } |
+                ForEach-Object { ([string]$_).Replace($env:USERPROFILE, '<user>') }
+              throw 'TSURUNO_BUILD_FAILED'
+            }
+
+            $runtime = Join-Path $base ('tsuruno-clone-runtime-' + $env:GITHUB_RUN_ID)
+            $null = New-Item -ItemType Directory -Path $runtime -Force
+            Get-ChildItem -LiteralPath $built.WorkingDirectory -File | Copy-Item -Destination $runtime
+            foreach ($folder in @('SampleShaders','FrameworkShaders')) {
+              Copy-Item -LiteralPath (Join-Path $built.WorkingDirectory $folder) -Destination $runtime -Recurse
+            }
+            $resources = Join-Path $runtime 'Resources'
+            $null = New-Item -ItemType Directory -Path $resources -Force
+            Get-ChildItem -LiteralPath (Join-Path $built.WorkingDirectory 'Resources') -File | Copy-Item -Destination $resources
+            $modelTarget = Join-Path $resources 'model'
+            $null = New-Item -ItemType Directory -Path $modelTarget -Force
+            Get-ChildItem -LiteralPath $sourceRoot -Force | Copy-Item -Destination $modelTarget -Recurse -Force
+            Copy-Item -LiteralPath $config.FullName -Destination (Join-Path $modelTarget 'model.model3.json') -Force
+            Copy-Item -LiteralPath (Join-Path $buildDir 'bin\Demo\Release\Demo.exe') -Destination (Join-Path $runtime 'Demo.exe') -Force
+
+            $process = Start-Process -FilePath (Join-Path $runtime 'Demo.exe') -WorkingDirectory $runtime -PassThru
+            $timer = [Diagnostics.Stopwatch]::StartNew()
+            $windowSeen = $false
+            $responsive = $false
+            while ($timer.Elapsed.TotalSeconds -lt 30) {
+              $process.Refresh()
+              if ($process.HasExited) { break }
+              if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
+                $windowSeen = $true
+                $responsive = $process.Responding
+                break
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $windowSeen -or -not $responsive -or $process.HasExited) {
+              throw 'TSURUNO_WINDOW_START_FAILED'
+            }
+
+            # group_16 movement sequence is ~12 seconds; leave extra time for visual confirmation.
+            Start-Sleep -Seconds 18
+            $process.Refresh()
+            if ($process.HasExited -or -not $process.Responding) { throw 'TSURUNO_WINDOW_DID_NOT_STAY_RESPONSIVE' }
+            $closeRequested = $process.CloseMainWindow()
+            $closed = $process.WaitForExit(10000)
+            if (-not $closeRequested -or -not $closed -or $process.ExitCode -ne 0) { throw 'TSURUNO_WINDOW_CLOSE_FAILED' }
+
+            [ordered]@{
+              Kind = 'tsuruno_100300_isolated_movement_probe'
+              ModelFound = $true
+              RequiredMotionsFound = @('000','101','200','400')
+              BuildSucceeded = $true
+              WindowObserved = $windowSeen
+              Responsive = $responsive
+              Sequence = 'group_16 movement only; audio and expressions intentionally disabled'
+              SourceAssetsModified = $false
+              VisualMovement = 'requires_user_confirmation'
+            } | ConvertTo-Json -Depth 4
+          } catch {
+            Write-Output ('TSURUNO_CLONE_PROBE_FAILED ' + $_.Exception.Message.Replace($env:USERPROFILE, '<user>'))
+            exit 1
+          } finally {
+            if ($null -ne $process -and -not $process.HasExited) {
+              $null = $process.CloseMainWindow()
+            }
+          }
