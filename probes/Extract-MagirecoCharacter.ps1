@@ -57,22 +57,43 @@ function Test-RemotePath([string]$Path,[switch]$Directory) {
     return (@($result|ForEach-Object {[string]$_}) -contains 'PRESENT')
 }
 
+function Get-OptionalPropertyValue($Object,[string]$Name) {
+    if($null -eq $Object){return $null}
+    $property=$Object.PSObject.Properties[$Name]
+    if($null -eq $property){return $null}
+    return $property.Value
+}
+
 function Get-ModelReferences($Model) {
     $refs=New-Object 'System.Collections.Generic.List[string]'
-    if($Model.FileReferences.Moc){$refs.Add([string]$Model.FileReferences.Moc)}
-    foreach($texture in @($Model.FileReferences.Textures)){if($texture){$refs.Add([string]$texture)}}
+    $fileReferences=Get-OptionalPropertyValue $Model 'FileReferences'
+    if($null -eq $fileReferences){throw 'MODEL_FILE_REFERENCES_MISSING'}
+
+    $moc=Get-OptionalPropertyValue $fileReferences 'Moc'
+    if($moc){$refs.Add([string]$moc)}
+
+    foreach($texture in @(Get-OptionalPropertyValue $fileReferences 'Textures')){
+        if($texture){$refs.Add([string]$texture)}
+    }
+
     foreach($key in @('Physics','Pose','UserData','DisplayInfo')){
-        $value=$Model.FileReferences.$key
+        $value=Get-OptionalPropertyValue $fileReferences $key
         if($value){$refs.Add([string]$value)}
     }
-    foreach($expression in @($Model.FileReferences.Expressions)){
-        if($expression.File){$refs.Add([string]$expression.File)}
+
+    foreach($expression in @(Get-OptionalPropertyValue $fileReferences 'Expressions')){
+        $file=Get-OptionalPropertyValue $expression 'File'
+        if($file){$refs.Add([string]$file)}
     }
-    if($Model.FileReferences.Motions){
-        foreach($group in $Model.FileReferences.Motions.PSObject.Properties){
+
+    $motions=Get-OptionalPropertyValue $fileReferences 'Motions'
+    if($null -ne $motions){
+        foreach($group in $motions.PSObject.Properties){
             foreach($motion in @($group.Value)){
-                if($motion.File){$refs.Add([string]$motion.File)}
-                if($motion.Sound){$refs.Add([string]$motion.Sound)}
+                $file=Get-OptionalPropertyValue $motion 'File'
+                $sound=Get-OptionalPropertyValue $motion 'Sound'
+                if($file){$refs.Add([string]$file)}
+                if($sound){$refs.Add([string]$sound)}
             }
         }
     }
@@ -109,7 +130,9 @@ try {
     $modelPath=Join-Path $live2d 'model.model3.json'
     if(-not(Test-Path -LiteralPath $modelPath -PathType Leaf)){throw 'MODEL_CONFIG_NOT_EXTRACTED'}
     $model=Get-Content -LiteralPath $modelPath -Raw -Encoding UTF8|ConvertFrom-Json
-    if($model.Version -ne 3 -or -not $model.FileReferences.Moc){throw 'MODEL_CONFIG_UNSUPPORTED'}
+    $fileReferences=Get-OptionalPropertyValue $model 'FileReferences'
+    $moc=Get-OptionalPropertyValue $fileReferences 'Moc'
+    if($model.Version -ne 3 -or -not $moc){throw 'MODEL_CONFIG_UNSUPPORTED'}
     $refs=Get-ModelReferences $model
     $missingRefs=New-Object 'System.Collections.Generic.List[string]'
     foreach($relative in $refs){
@@ -147,9 +170,12 @@ try {
     try{$fingerprint=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','')}finally{$sha.Dispose()}
 
     $motionCount=0
-    if($model.FileReferences.Motions){
-        foreach($p in $model.FileReferences.Motions.PSObject.Properties){$motionCount+=@($p.Value).Count}
+    $motions=Get-OptionalPropertyValue $fileReferences 'Motions'
+    if($null -ne $motions){
+        foreach($p in $motions.PSObject.Properties){$motionCount+=@($p.Value).Count}
     }
+    $textures=@(Get-OptionalPropertyValue $fileReferences 'Textures')
+    $expressions=@(Get-OptionalPropertyValue $fileReferences 'Expressions')
 
     $finalParent=Join-Path $assetRoot $CharacterId
     $null=New-Item -ItemType Directory -Path $finalParent -Force
@@ -173,8 +199,8 @@ try {
         VoiceFileCount=@(Get-ChildItem -LiteralPath (Join-Path $final 'voice-hca') -File).Count
         ModelFileCount=$modelFiles.Count
         ReferencedFileCount=$refs.Count
-        TextureCount=@($model.FileReferences.Textures).Count
-        ExpressionCount=@($model.FileReferences.Expressions).Count
+        TextureCount=$textures.Count
+        ExpressionCount=$expressions.Count
         MotionCount=$motionCount
         AssetFingerprintSHA256=$fingerprint
         ExtractedUtc=[DateTime]::UtcNow.ToString('o')
